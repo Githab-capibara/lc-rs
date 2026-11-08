@@ -83,9 +83,14 @@ writes it into the model directory so the two paths agree.
 2. the download goes to `<name>.part` in the model directory;
 3. a resumed download sends a `Range` header; if the server ignores it, the
    partial file is discarded and the download starts over;
-4. the size is checked, then the SHA-256 is computed and compared;
-5. a mismatch or a truncation triggers a retry — four attempts in total;
-6. the verified file is moved into place with an atomic rename.
+4. the answer is checked against the request: the server must reply `206`
+   with a `Content-Range` that starts exactly where the request did. A
+   server that answers with a *different* range would otherwise produce a
+   file of exactly the right size with wrong bytes in the middle — that
+   failure was observed in the wild while validating this port;
+5. the size is checked, then the SHA-256 is computed and compared;
+6. a mismatch or a truncation triggers a retry — four attempts in total;
+7. the verified file is moved into place with an atomic rename.
 
 A failed download therefore never leaves a half-written checkpoint behind,
 and a corrupted artefact is detected rather than loaded.
