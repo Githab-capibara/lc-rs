@@ -151,27 +151,93 @@ pub fn detect_cookies() -> Option<CookieSource> {
     None
 }
 
-/// Whether a browser with the given name has a local profile directory.
+/// Whether a browser with the given name has a local cookie database.
+///
+/// The *profile directory* is not enough: a browser can leave an empty
+/// profile behind, and `yt-dlp --cookies-from-browser` then fails with
+/// "could not find chrome cookies database", which aborts the download. The
+/// cookie database itself is what matters.
+///
+/// Every name is mapped to exactly the directories `yt-dlp` searches for
+/// *that* browser. Mixing them up would report cookies that the tool
+/// cannot find: a Chromium profile lives in `~/.config/chromium`, while
+/// `yt-dlp --cookies-from-browser chrome` only looks in
+/// `~/.config/google-chrome`.
 fn browser_profile_exists(name: &str) -> bool {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let Some(home) = home else {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
         return false;
     };
+    browser_profile_exists_in(&home, name)
+}
+
+/// The lookup, with the home directory passed in, so that it can be tested.
+fn browser_profile_exists_in(home: &Path, name: &str) -> bool {
     let candidates: Vec<PathBuf> = match name {
-        "chrome" | "chromium" => vec![
+        "chrome" => vec![
             home.join(".config/google-chrome"),
-            home.join(".config/chromium"),
             home.join("Library/Application Support/Google/Chrome"),
         ],
-        "firefox" => vec![home.join(".mozilla/firefox")],
-        "brave" | "bravebrowser" => vec![home.join(".config/BraveSoftware/Brave-Browser")],
-        "edge" => vec![home.join(".config/microsoft-edge")],
-        "vivaldi" => vec![home.join(".config/vivaldi")],
-        "opera" => vec![home.join(".config/opera")],
-        "safari" => vec![home.join("Library/Safari")],
+        "chromium" => vec![home.join(".config/chromium")],
+        "brave" | "bravebrowser" => vec![
+            home.join(".config/BraveSoftware/Brave-Browser"),
+            home.join("Library/Application Support/BraveSoftware/Brave-Browser"),
+        ],
+        "edge" => vec![
+            home.join(".config/microsoft-edge"),
+            home.join("Library/Application Support/Microsoft Edge"),
+        ],
+        "firefox" => vec![
+            home.join(".mozilla/firefox"),
+            home.join("Library/Application Support/Firefox"),
+        ],
+        "vivaldi" => vec![
+            home.join(".config/vivaldi"),
+            home.join("Library/Application Support/Vivaldi"),
+        ],
+        "opera" => vec![
+            home.join(".config/opera"),
+            home.join("Library/Application Support/com.operasoftware.Opera"),
+        ],
+        "safari" => vec![home.join("Library/Cookies")],
         _ => Vec::new(),
     };
-    candidates.iter().any(|p| p.is_dir())
+    candidates.iter().any(|root| profile_has_cookie_db(root))
+}
+
+/// Whether a browser profile tree holds a cookie database.
+///
+/// The Chromium family stores it as `<profile>/Cookies`, Firefox as
+/// `<profile>/cookies.sqlite`, and Safari as a single
+/// `Cookies.binarycookies` file outside the profile tree.
+fn profile_has_cookie_db(root: &Path) -> bool {
+    if root.join("Cookies.binarycookies").is_file() {
+        return true;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            let name = path
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            if name == "Cookies" || name == "cookies.sqlite" {
+                return true;
+            }
+            continue;
+        }
+        if !path.is_dir() {
+            continue;
+        }
+        // A browser profile lives one level below the root: `Default/Cookies`.
+        for file in ["Cookies", "cookies.sqlite"] {
+            if path.join(file).is_file() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Validate a media URL or local path.
@@ -345,7 +411,9 @@ fn build_download_args(
         "--no-playlist".to_string(),
         "--no-warnings".to_string(),
         "--restrict-filenames".to_string(),
-        "--overwrites".to_string(),
+        // The Python API option `overwrites` is spelled `--force-overwrites`
+        // on the command line; there is no `--overwrites`.
+        "--force-overwrites".to_string(),
         "--retries".to_string(),
         "5".to_string(),
         "--fragment-retries".to_string(),
@@ -617,5 +685,88 @@ mod tests {
         assert!(args.contains(&"--no-playlist".to_string()));
         assert!(args.iter().any(|a| a == "after_move:%(.)j"));
         assert_eq!(args.last().unwrap(), "https://example.com/v");
+    }
+
+    /// Every flag must exist in the installed `yt-dlp`.
+    ///
+    /// The Python API option `overwrites` has no command-line counterpart
+    /// under that name — it is `--force-overwrites` — and the wrong spelling
+    /// made *every* download fail with "no such option". The check is
+    /// offline: it compares the flags against the tool's own help text.
+    #[test]
+    fn every_flag_exists_in_the_installed_ytdlp() {
+        let Some(program) = crate::proc::find_executable("yt-dlp") else {
+            // yt-dlp is not installed; there is nothing to check against.
+            return;
+        };
+        let output = std::process::Command::new(&program)
+            .arg("--help")
+            .output()
+            .expect("yt-dlp --help must run");
+        assert!(output.status.success(), "yt-dlp --help failed");
+        let help = String::from_utf8_lossy(&output.stdout);
+
+        let args = build_download_args(
+            "https://example.com/v",
+            Path::new("/tmp/work"),
+            "socks5h://127.0.0.1:9050",
+            Some(&CookieSource::Browser("chrome".to_string())),
+            &["tv", "web"],
+        );
+
+        for arg in &args {
+            // `--` ends the option list; everything after it is a value.
+            if arg == "--" {
+                break;
+            }
+            if !arg.starts_with("--") {
+                continue;
+            }
+            // `--print` takes a template, `--extractor-args` takes a value;
+            // only the flag itself has to exist.
+            let flag = arg.split_once('=').map_or(arg.as_str(), |(name, _)| name);
+            assert!(
+                help.contains(&format!(" {flag} ")) || help.contains(&format!("{flag} ")),
+                "yt-dlp does not know the flag {flag}"
+            );
+        }
+    }
+
+    /// A browser is only usable when its *own* cookie database exists.
+    ///
+    /// A Chromium profile in `~/.config/chromium` must not make the tool
+    /// claim that Chrome cookies are available: `yt-dlp --cookies-from-browser
+    /// chrome` looks in `~/.config/google-chrome` and fails there, which
+    /// aborts the whole download.
+    #[test]
+    fn browser_profiles_are_not_mixed_up() {
+        let home = tempfile::tempdir().expect("a temporary home directory");
+        let chromium = home.path().join(".config/chromium/Default");
+        std::fs::create_dir_all(&chromium).unwrap();
+        std::fs::write(chromium.join("Cookies"), b"sqlite").unwrap();
+
+        assert!(browser_profile_exists_in(home.path(), "chromium"));
+        assert!(!browser_profile_exists_in(home.path(), "chrome"));
+        assert!(!browser_profile_exists_in(home.path(), "firefox"));
+
+        // The same database, now under the Chrome directory.
+        let chrome = home.path().join(".config/google-chrome/Default");
+        std::fs::create_dir_all(&chrome).unwrap();
+        std::fs::write(chrome.join("Cookies"), b"sqlite").unwrap();
+        assert!(browser_profile_exists_in(home.path(), "chrome"));
+    }
+
+    /// An empty profile directory is not a source of cookies.
+    #[test]
+    fn an_empty_profile_is_not_a_cookie_source() {
+        let home = tempfile::tempdir().expect("a temporary home directory");
+        std::fs::create_dir_all(home.path().join(".config/google-chrome")).unwrap();
+        assert!(!browser_profile_exists_in(home.path(), "chrome"));
+
+        // Firefox keeps its jar as `cookies.sqlite` inside the profile.
+        let firefox = home.path().join(".mozilla/firefox/abc.default");
+        std::fs::create_dir_all(&firefox).unwrap();
+        std::fs::write(firefox.join("cookies.sqlite"), b"sqlite").unwrap();
+        assert!(browser_profile_exists_in(home.path(), "firefox"));
     }
 }
