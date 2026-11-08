@@ -29,7 +29,15 @@ both are set, `LCRS_` wins.
 | `XDG_DATA_HOME` | `~/.local/share` on Linux | the platform data root |
 | `XDG_CONFIG_HOME` | `~/.config` on Linux | the platform config root |
 | `XDG_CACHE_HOME` | `~/.cache` on Linux | the platform cache root |
-| `RUST_LOG` | `info` | the `tracing` filter; `RUST_LOG=debug` shows the download progress |
+| `RUST_LOG` | `info` | the `tracing` filter; `RUST_LOG=debug` shows the download progress, `RUST_LOG=warn` silences the progress lines |
+
+The diagnostics go to **stderr**, so that stdout carries only the
+artefacts — the transcript and the reports the user asked for:
+
+```text
+ INFO language: Ukrainian (uk, p=0.45)
+ INFO done (Ukrainian, nemotron-3.5-asr-streaming-0.6b)
+```
 
 The proxy URL is validated before use. Only the `http`, `https`, `socks5`
 and `socks5h` schemes are accepted.

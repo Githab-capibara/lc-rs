@@ -75,6 +75,9 @@ impl ModelSpec {
     }
 
     /// URL of one artefact.
+    ///
+    /// Never called for an embedded model: its artefacts live in the binary,
+    /// not in a repository.
     pub fn file_url(&self, file: &ModelFile) -> String {
         format!("{}/{}", self.url_base(), file.name)
     }
@@ -214,7 +217,7 @@ const NEMOTRON_FILES: &[ModelFile] = &[
 const REGISTRY: &[ModelSpec] = &[
     ModelSpec {
         key: MODEL_LANGID,
-        hf_repo: "local/lc-rs-assets",
+        hf_repo: "speechbrain/lang-id-commonlanguage_ecapa",
         role: ROLE_LANGID,
         description: "ECAPA-TDNN language identifier, 45 languages (routing)",
         approx_size_mb: 84,

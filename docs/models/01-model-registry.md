@@ -15,7 +15,7 @@ exact size and SHA-256.
 
 | Key | Role | Repository | Size |
 |---|---|---|---|
-| `langid-ecapa` | language-id | embedded in the binary | 84 MB |
+| `langid-ecapa` | language-id | embedded in the binary (exported from `speechbrain/lang-id-commonlanguage_ecapa`) | 84 MB |
 | `qwen3-asr-0.6b` | russian | `andrewleech/qwen3-asr-0.6b-onnx` | 2 030 MB |
 | `parakeet-tdt-0.6b-v3` | english | `istupakov/parakeet-tdt-0.6b-v3-onnx` | 670 MB |
 | `nemotron-3.5-asr-streaming-0.6b` | multilingual | `DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu` | 1 021 MB |
@@ -64,10 +64,15 @@ download.
 ### `langid-ecapa`
 
 The ECAPA-TDNN classifier is embedded in the binary
-(`assets/langid/langid_inline.onnx`, 84 110 845 bytes). The registry entry
-exists so that `lc-rs model list` and `lc-rs doctor` report it like every
-other model; `lc-rs model download langid-ecapa` writes it into the model
-directory so the two paths agree.
+(`assets/langid/langid_inline.onnx`, 84 110 845 bytes), so the routing stage
+needs no download at all. The graph was exported to ONNX from
+`speechbrain/lang-id-commonlanguage_ecapa`; the class order is the one of
+the shipped `label_encoder.txt`, which a unit test checks against the
+compiled-in label table.
+
+The registry entry exists so that `lc-rs model list` and `lc-rs doctor`
+report it like every other model; `lc-rs model download langid-ecapa`
+writes it into the model directory so the two paths agree.
 
 ## The downloader
 

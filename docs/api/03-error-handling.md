@@ -72,6 +72,9 @@ an enrichment of an artefact that has already been written:
 The rule: **an error means the requested artefact was not produced; a
 warning means it was produced but something around it was not.**
 
+The warnings are emitted through `tracing` and printed to stderr. The
+filter comes from `RUST_LOG` and defaults to `info`.
+
 ## The library API
 
 `lc-rs` is also a library (`lc_rs`), and the error type is part of its

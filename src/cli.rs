@@ -181,6 +181,7 @@ struct SearchArgs {
 
 /// Run the CLI and return the process exit code.
 pub fn run(args: &[String]) -> i32 {
+    init_tracing();
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -192,6 +193,31 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
     runtime.block_on(dispatch(args))
+}
+
+/// Install the `tracing` subscriber.
+///
+/// Without it every `tracing::warn!` and `tracing::info!` in the crate is
+/// discarded, and the user never learns that — say — the summary was
+/// skipped or that the search index could not be updated.
+///
+/// The filter comes from `RUST_LOG` and defaults to `info`. The output goes
+/// to stderr, so that stdout carries only the artefacts: the transcript and
+/// the reports the user asked for.
+fn init_tracing() {
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    // `try_init` fails when a subscriber is already installed, which happens
+    // in the tests; that is not an error.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_target(false)
+        .with_ansi(false)
+        .without_time()
+        .compact()
+        .try_init();
 }
 
 /// Dispatch on the first argument.
@@ -642,7 +668,17 @@ fn model_info(key: &str) -> i32 {
             "ONNX Runtime (CPU)"
         }
     );
-    println!("Source:       https://huggingface.co/{}", spec.hf_repo);
+    if spec.is_embedded() {
+        // The graph is compiled into the binary, so there is nothing to
+        // download and the on-disk copy is optional.
+        println!("Source:       embedded in the binary");
+        println!(
+            "Origin:       https://huggingface.co/{} (exported to ONNX)",
+            spec.hf_repo
+        );
+    } else {
+        println!("Source:       https://huggingface.co/{}", spec.hf_repo);
+    }
     println!("Local path:   {}", spec.local_dir().display());
     if missing.is_empty() {
         let total: u64 = spec
@@ -652,10 +688,14 @@ fn model_info(key: &str) -> i32 {
                 std::fs::metadata(spec.local_dir().join(file.name)).map_or(0, |meta| meta.len())
             })
             .sum();
-        println!(
-            "Installed:    yes ({} on disk)",
-            doctor::format_size_mb(total / (1024 * 1024))
-        );
+        if spec.is_embedded() {
+            println!("Installed:    yes (compiled in, no download needed)");
+        } else {
+            println!(
+                "Installed:    yes ({} on disk)",
+                doctor::format_size_mb(total / (1024 * 1024))
+            );
+        }
     } else {
         println!("Installed:    no");
         let names: Vec<&str> = missing.iter().map(|file| file.name).collect();
