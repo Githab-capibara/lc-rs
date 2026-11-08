@@ -1,0 +1,67 @@
+[package]
+name = "lc-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+description = "Fully-local video → transcript using yt-dlp + ffmpeg + local language-ID and ASR models (Rust port of localcaption)."
+repository = "https://github.com/Githab-capibara/lc-rs"
+readme = "README.md"
+keywords = ["asr", "transcription", "youtube", "onnx", "subtitles"]
+categories = ["command-line-utilities", "multimedia::audio"]
+
+[lib]
+name = "lc_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lc-rs"
+path = "src/main.rs"
+
+[features]
+default = []
+# Opt-in GPU execution for the ONNX Runtime sessions. Requires a CUDA 13
+# toolkit and cuDNN 9 on LD_LIBRARY_PATH (e.g. runtime/*/lib inside the old
+# python venvs). CPU execution paths are always compiled.
+cuda = ["ort/cuda"]
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "fs", "process", "time", "io-util", "net"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream", "socks", "charset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+thiserror = "2"
+redb = "4.4"
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "ndarray", "download-binaries", "api-31", "tls-rustls"] }
+ndarray = "0.16"
+rustfft = "6.4"
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+sha2 = "0.10"
+tempfile = "3"
+url = "2.5"
+memchr = "2.8"
+futures-util = "0.3"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.test]
+opt-level = 0
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

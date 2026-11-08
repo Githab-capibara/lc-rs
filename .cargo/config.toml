@@ -1,0 +1,9 @@
+[build]
+# Keep ort's build-time native-tls path out (we use rustls everywhere).
+rustflags = []
+
+[net]
+retry = 3
+
+[registries.crates-io]
+protocol = "sparse"

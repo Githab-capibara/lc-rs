@@ -1,0 +1,17 @@
+/target
+**/*.rs.bk
+*.pdb
+*.rlib
+*~
+*.swp
+
+# Local model checkpoints (fetched with `lc-rs model download`).
+/models/*/
+!/models/README.md
+
+# Generated transcripts / work dirs.
+/transcripts/
+/.work/
+
+# Docs build artefacts.
+/docs/_book/
