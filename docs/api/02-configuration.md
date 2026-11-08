@@ -42,6 +42,29 @@ artefacts — the transcript and the reports the user asked for:
 The proxy URL is validated before use. Only the `http`, `https`, `socks5`
 and `socks5h` schemes are accepted.
 
+## Cookie detection
+
+The cookies for `yt-dlp` are resolved in this order:
+
+1. `LCRS_YTDLP_COOKIES` — a Netscape cookie jar;
+2. `~/.localcaption/yt-dlp-cookies.txt` — the default jar;
+3. the browsers of `LCRS_YTDLP_COOKIE_BROWSERS`, or `chrome,firefox` when
+   the variable is not set.
+
+A browser is only accepted when its **cookie database** exists — `Cookies`
+for the Chromium family, `cookies.sqlite` for Firefox — in the directory
+`yt-dlp` itself searches for that browser. An empty profile directory is
+not enough: `yt-dlp --cookies-from-browser` then aborts the download with
+"could not find chrome cookies database".
+
+The Chromium family is matched strictly, so a Chromium profile in
+`~/.config/chromium` never makes the tool claim that *Chrome* cookies are
+available. To use the Chromium profile, name it explicitly:
+
+```sh
+LCRS_YTDLP_COOKIE_BROWSERS=chromium lc-rs <url>
+```
+
 ## Filesystem layout
 
 ```text
