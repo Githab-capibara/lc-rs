@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  check:
+    name: fmt, clippy and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check the formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --all-targets --all-features -- --deny warnings
+
+      - name: Test
+        run: cargo test --all-features
+
+      - name: Build the release binary
+        run: cargo build --release
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Test
+        run: cargo test --locked
+
+  no-unsafe:
+    name: Forbid unsafe code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: The crate must not contain unsafe code
+        run: |
+          # `#![forbid(unsafe_code)]` is enforced by the compiler; this job
+          # checks that the attribute is actually present, so that it cannot
+          # be dropped by accident.
+          if ! grep -q 'forbid(unsafe_code)' src/lib.rs; then
+            echo "::error::src/lib.rs must keep #![forbid(unsafe_code)]"
+            exit 1
+          fi
+          # …and that no `unsafe` item was introduced behind the compiler's
+          # back.
+          if grep -rn --include='*.rs' -E '\bunsafe (fn|impl|trait|extern)\b|\bunsafe \{' src/; then
+            echo "::error::unsafe code found in src/"
+            exit 1
+          fi
+
+  clippy-pedantic:
+    name: Pedantic lints on the library
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Lint the library
+        run: cargo clippy --lib --all-features -- --deny warnings --deny clippy::pedantic
