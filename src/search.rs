@@ -220,6 +220,38 @@ pub fn search(path: &Path, term: &str) -> Result<Vec<SearchHit>> {
     Ok(hits)
 }
 
+/// The segments to search in, with the reference implementation's fallback.
+///
+/// The indexed segments are authoritative. When a transcript has none — it
+/// was indexed without them, or it was never segmented — the sibling
+/// `.json` or `.srt` is read, and failing that the transcript file itself
+/// is split into one synthetic segment per non-empty line. Without that
+/// fallback a transcript without timed markers would be unsearchable.
+fn fallback_segments(entry: &IndexEntry, segments: &[Segment]) -> Vec<Segment> {
+    if !segments.is_empty() {
+        return segments.to_vec();
+    }
+    let path = Path::new(&entry.transcript);
+    if path.as_os_str().is_empty() {
+        return Vec::new();
+    }
+    let from_disk = crate::chapters::load_segments(path);
+    if !from_disk.is_empty() {
+        return from_disk;
+    }
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    body.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| Segment {
+            start: -1.0,
+            end: -1.0,
+            text: line.to_string(),
+        })
+        .collect()
+}
+
 /// Compute the hits of one transcript.
 fn hits_for_entry(entry: &IndexEntry, segments: &[Segment], needle: &str) -> Vec<SearchHit> {
     let title_bonus = entry.title.to_lowercase().matches(needle).count() as i64;
@@ -241,7 +273,7 @@ fn hits_for_entry(entry: &IndexEntry, segments: &[Segment], needle: &str) -> Vec
         });
     }
 
-    for segment in segments {
+    for segment in fallback_segments(entry, segments) {
         let count = segment.text.to_lowercase().matches(needle).count() as i64;
         if count == 0 {
             continue;
@@ -371,5 +403,29 @@ mod tests {
         let path = dir.path().join("missing.redb");
         assert!(load(&path).unwrap().is_empty());
         assert!(search(&path, "anything").unwrap().is_empty());
+    }
+
+    /// A transcript without timed segments is still searchable.
+    ///
+    /// The reference implementation falls back to one synthetic segment per
+    /// non-empty line of the transcript file, so a match in an unsegmented
+    /// transcript is found instead of being silently dropped.
+    #[test]
+    fn an_unsegmented_transcript_is_still_searchable() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("index.redb");
+        let transcript = dir.path().join("abc123.md");
+        std::fs::write(&transcript, "First line\n\nSecond line with rust\n").unwrap();
+
+        let mut entry = entry();
+        entry.transcript = transcript.to_string_lossy().into_owned();
+        // No segments are indexed, and no sibling `.json` or `.srt` exists.
+        upsert(&path, &entry, &[]).unwrap();
+
+        let hits = search(&path, "rust").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].text.contains("Second line with rust"));
+        // A line without a timestamp carries no start.
+        assert!(hits[0].start.is_none());
     }
 }
