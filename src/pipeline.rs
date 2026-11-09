@@ -632,4 +632,95 @@ mod tests {
         assert!(result.vtt.as_ref().unwrap().is_file());
         assert!(result.json.as_ref().unwrap().is_file());
     }
+
+    /// In single-file mode the chaptered transcript replaces the plain one.
+    #[test]
+    fn chapters_fold_into_the_single_markdown_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("talk");
+        let segments = vec![Segment {
+            start: 0.0,
+            end: 2.0,
+            text: "Intro".to_string(),
+        }];
+        let result =
+            write_output_artefacts(&base, &segments, "Intro", "parakeet", "en", "md").unwrap();
+        let md_path = result.md.clone().unwrap();
+
+        let chapters = vec![Chapter {
+            title: "Opening".to_string(),
+            start_time: 0.0,
+            end_time: None,
+        }];
+        let mut chapters_json = None;
+        let mut chaptered_md = None;
+        write_chapter_artefacts(
+            &base,
+            &chapters,
+            &result,
+            "md",
+            &mut chapters_json,
+            &mut chaptered_md,
+        )
+        .unwrap();
+
+        // Nothing extra was written in single-file mode.
+        assert!(chapters_json.is_none());
+        assert!(chaptered_md.is_none());
+
+        let body = std::fs::read_to_string(&md_path).unwrap();
+        assert!(
+            body.contains("Opening"),
+            "the chapter title is missing: {body}"
+        );
+        assert!(
+            body.contains("Intro"),
+            "the segment text is missing: {body}"
+        );
+    }
+
+    /// With several formats the chapters get their own artefacts.
+    #[test]
+    fn chapters_get_their_own_artefacts_in_multi_file_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("talk");
+        let segments = vec![Segment {
+            start: 0.0,
+            end: 2.0,
+            text: "Intro".to_string(),
+        }];
+        let result =
+            write_output_artefacts(&base, &segments, "Intro", "parakeet", "en", "all").unwrap();
+
+        let chapters = vec![Chapter {
+            title: "Opening".to_string(),
+            start_time: 0.0,
+            end_time: None,
+        }];
+        let mut chapters_json = None;
+        let mut chaptered_md = None;
+        write_chapter_artefacts(
+            &base,
+            &chapters,
+            &result,
+            "all",
+            &mut chapters_json,
+            &mut chaptered_md,
+        )
+        .unwrap();
+
+        let chapters_path = chapters_json.expect("the chapter list");
+        assert!(chapters_path.is_file());
+        let listed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&chapters_path).unwrap()).unwrap();
+        assert_eq!(listed[0]["title"], "Opening");
+
+        let chaptered_path = chaptered_md.expect("the chaptered transcript");
+        assert!(chaptered_path.is_file());
+        let body = std::fs::read_to_string(&chaptered_path).unwrap();
+        assert!(
+            body.contains("Opening"),
+            "the chapter title is missing: {body}"
+        );
+    }
 }
