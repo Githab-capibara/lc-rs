@@ -38,6 +38,13 @@ pub enum Error {
     #[error("model registry error: {0}")]
     Model(String),
 
+    /// The registry does not know the requested model key.
+    ///
+    /// The message is the one the reference implementation prints, so a
+    /// user who copies it from one tool into the other is not surprised.
+    #[error("{0}")]
+    UnknownModel(String),
+
     /// Playlist expansion failed.
     #[error("playlist error: {0}")]
     Playlist(String),

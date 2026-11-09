@@ -342,8 +342,8 @@ pub fn get_model(key: &str) -> Result<&'static ModelSpec> {
             .map(|m| m.key)
             .collect::<Vec<_>>()
             .join(", ");
-        Error::Model(format!(
-            "Unknown model: {key:?}\nRun `lc-rs model list` to see the supported models.\nValid keys: {valid}"
+        Error::UnknownModel(format!(
+            "Unknown model: '{key}'\nRun `lc-rs model list` to see the supported models.\nValid keys: {valid}"
         ))
     })
 }
@@ -750,6 +750,29 @@ mod tests {
     fn get_model_rejects_unknown_keys() {
         assert!(get_model("nope").is_err());
         assert_eq!(get_model(MODEL_LANGID).unwrap().role, ROLE_LANGID);
+    }
+
+    /// The unknown-key message names the key and the valid ones.
+    #[test]
+    fn the_unknown_model_message_names_the_valid_keys() {
+        let err = get_model("nope").expect_err("the key must be rejected");
+        assert!(matches!(err, Error::UnknownModel(_)));
+        let message = err.to_string();
+        assert!(
+            message.starts_with("Unknown model: 'nope'"),
+            "unexpected message: {message}"
+        );
+        assert!(
+            message.contains("Run `lc-rs model list`"),
+            "unexpected message: {message}"
+        );
+        for spec in known_models() {
+            assert!(
+                message.contains(spec.key),
+                "the message does not mention {}: {message}",
+                spec.key
+            );
+        }
     }
 
     #[test]

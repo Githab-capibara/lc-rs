@@ -275,6 +275,15 @@ async fn cmd_transcribe(rest: &[String]) -> i32 {
         return 2;
     }
 
+    // An unknown model key is rejected before anything is downloaded: the
+    // reference implementation names the valid keys and stops.
+    if let Some(forced) = args.model.as_deref()
+        && let Err(err) = models::get_model(forced)
+    {
+        eprintln!("lc-rs: {err}");
+        return 1;
+    }
+
     let required = required_models(&args.language, args.model.as_deref());
     if !ensure_models(&required, args.auto_download).await {
         return 1;

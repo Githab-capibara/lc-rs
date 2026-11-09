@@ -21,7 +21,8 @@ instead of scraping a message.
 | `AudioConversion` | `ffmpeg` failed, or the WAV has the wrong shape |
 | `Transcription` | the ASR or the classifier failed to produce a transcript |
 | `Install` | an automated install step failed |
-| `Model` | the model registry rejected a key, or a checkpoint is inconsistent |
+| `Model` | a checkpoint is inconsistent, or a model failed to load |
+| `UnknownModel` | the registry does not know the requested key |
 | `Playlist` | the playlist expansion failed |
 | `Usage` | a local capability check failed |
 | `Io` | a filesystem operation failed; carries the path and the source error |
@@ -46,6 +47,20 @@ Or download everything:  lc-rs model download --all
 
 The `Io` variant is special: it renders the path *and* the underlying
 error, so the user knows which file failed.
+
+`UnknownModel` is special too: it carries the whole three-line message,
+so that the CLI prints the key and the valid ones without adding a
+category prefix of its own.
+
+```console
+$ lc-rs --model nope talk.mp3
+lc-rs: Unknown model: 'nope'
+Run `lc-rs model list` to see the supported models.
+Valid keys: langid-ecapa, qwen3-asr-0.6b, qwen3-asr-0.6b-int4, parakeet-tdt-0.6b-v3, nemotron-3.5-asr-streaming-0.6b
+```
+
+The key is checked before anything is downloaded, so a typo never starts
+a multi-gigabyte download.
 
 ## The exit codes
 
@@ -95,7 +110,7 @@ Callers that need to distinguish the failures match on the variant:
 ```rust
 match lc_rs::models::get_model(key) {
     Ok(spec) => { /* … */ }
-    Err(Error::Model(message)) => eprintln!("unknown model: {message}"),
+    Err(Error::UnknownModel(message)) => eprintln!("unknown model: {message}"),
     Err(other) => return Err(other),
 }
 ```
