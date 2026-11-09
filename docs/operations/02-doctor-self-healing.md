@@ -9,7 +9,7 @@
 
 ## The checks
 
-`lc-rs doctor` runs five groups of checks and prints one row per check.
+`lc-rs doctor` runs six groups of checks and prints one row per check.
 
 ### The binary
 
@@ -23,14 +23,21 @@ printed. `git` and `curl` are checked as well, because the package manager
 and the downloader use them.
 
 ```text
-Tools:
+System tools:
+  ✅ lc-rs  (0.1.0)
   ✅ ffmpeg  (/usr/bin/ffmpeg)
-  ✅ yt-dlp  (/usr/bin/yt-dlp)
+  ✅ git  (/usr/bin/git)
+  ✅ curl  (/usr/bin/curl)
 ```
 
 ### The downloader
 
 `yt-dlp` is invoked once with `--version` to make sure it actually runs.
+
+```text
+Downloader:
+  ✅ yt-dlp  (/usr/bin/yt-dlp)
+```
 
 ### The network
 
@@ -51,6 +58,11 @@ YouTube / Tor bot-check mitigations:
   ✅ cookies  (browser: chrome)
   ✅ tor-rotate  (ok (rotated the current circuit))
 ```
+
+A browser only counts when its cookie database exists in the directory
+`yt-dlp` searches for that browser; an empty profile directory does not.
+A machine without a logged-in browser therefore reports
+`❌ cookies (none — see LCRS_YTDLP_COOKIES / --cookies)`.
 
 ### The model runtimes
 
@@ -81,12 +93,21 @@ Models:
 | Gap | Repair |
 |---|---|
 | `ffmpeg` is missing | installed through the host's package manager |
-| `yt-dlp` is missing | installed through the host's package manager |
+| `git` is missing | installed through the host's package manager |
+| `curl` is missing | installed through the host's package manager |
+| `yt-dlp` is missing | installed with `pipx`, or with `pip` |
 | a checkpoint is missing | downloaded through the project's own downloader |
 
 The package-manager invocation has a ten-minute timeout and needs root, so
 it may fail on a locked-down machine — in which case the command says so
 and suggests the manual command.
+
+Two gaps cannot be repaired automatically, and are only reported as advice
+in the "How to fix" section:
+
+* **the browser cookies** — a Netscape cookie jar has to be exported by the
+  user, or a browser with a logged-in session has to be named;
+* **the Tor control port** — it has to be enabled in `torrc`.
 
 After the repairs, the diagnostics are **re-run**, so the output shows the
 state after the fix, not before.

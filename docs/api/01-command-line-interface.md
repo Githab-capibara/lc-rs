@@ -85,19 +85,38 @@ The output is one row per check, marked with ✅ or ❌:
 ```text
 lc-rs 0.1.0
 
-Tools:
+
+System tools:
+  ✅ lc-rs  (0.1.0)
   ✅ ffmpeg  (/usr/bin/ffmpeg)
+  ✅ git  (/usr/bin/git)
+  ✅ curl  (/usr/bin/curl)
+
+Downloader:
   ✅ yt-dlp  (/usr/bin/yt-dlp)
 
 Network:
   ✅ proxy  (socks5h://127.0.0.1:9050 (reachable))
 
+YouTube / Tor bot-check mitigations:
+  ✅ cookies  (browser: chrome)
+  ✅ tor-rotate  (ok (rotated the current circuit))
+
 Model runtimes:
   ✅ onnxruntime  (in-process (CPU))
 
 Models:
+  ✅ langid-ecapa (~84 MB)  (ECAPA-TDNN language identifier, 45 languages (routing))
   ✅ qwen3-asr-0.6b (~2.0 GB)  (Qwen3-ASR 0.6B — Russian (WER 5.13))
+  ✅ parakeet-tdt-0.6b-v3 (~670 MB)  (NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1))
+  ✅ nemotron-3.5-asr-streaming-0.6b (~1021 MB)  (NVIDIA Nemotron 3.5 ASR Streaming 0.6B — 40 languages, int8 graphs)
+
+All checks passed. You're good to go: lc-rs <url-or-file>
 ```
+
+The cookie row reflects the real state of the machine: a browser only
+counts when its cookie database exists, so a machine without a logged-in
+browser shows `❌ cookies (none — see LCRS_YTDLP_COOKIES / --cookies)`.
 
 Exit code `0` when every check passed, `1` otherwise.
 

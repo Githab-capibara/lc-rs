@@ -214,17 +214,26 @@ pub async fn run() -> Diagnostics {
             "unavailable — SIGNAL NEWNYM not reachable (Tor control port 9051?)".to_string()
         },
     });
-    if !can_rotate && cookies.is_none() {
+    if cookies.is_none() {
         diagnostics.fix_hints.push(
-            "YouTube 'Sign in to confirm you're not a bot' can block Tor exit \
-             IPs. Mitigations:\n  \
-             1. Enable Tor circuit rotation (Tor control port on 9051),\n  \
-             2. Export a Netscape cookie jar:\n       \
-             export LCRS_YTDLP_COOKIES=/path/to/cookies.txt\n     \
-             or use a logged-in browser:\n       \
-             export LCRS_YTDLP_COOKIE_BROWSERS=firefox,chrome\n  \
-             3. Bypass Tor entirely for one run:\n       \
+            "No usable browser cookies were found. yt-dlp needs a logged-in \
+             session to get past YouTube's bot check on a Tor exit IP.\n  \
+             1. Export a Netscape cookie jar:\n       \
+             export LCRS_YTDLP_COOKIES=/path/to/cookies.txt\n  \
+             2. Or point at a browser that holds one:\n       \
+             export LCRS_YTDLP_COOKIE_BROWSERS=firefox,chrome\n     \
+             (the browser is only used when its cookie database exists)\n  \
+             3. Or bypass Tor for one run:\n       \
              lc-rs <url> --no-proxy"
+                .to_string(),
+        );
+    }
+    if !can_rotate {
+        diagnostics.fix_hints.push(
+            "Tor circuit rotation is unavailable, so every run leaves the \
+             same exit IP.\n  \
+             Enable the Tor control port (9051) and set LCRS_TOR_CONTROL, \
+             or use --no-proxy."
                 .to_string(),
         );
     }

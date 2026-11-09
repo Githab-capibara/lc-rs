@@ -538,7 +538,9 @@ async fn cmd_doctor(rest: &[String]) -> i32 {
     }
 
     if !args.fix {
-        if !diagnostics.fix_hints.is_empty() {
+        if diagnostics.fix_hints.is_empty() {
+            println!("Some checks failed.");
+        } else {
             println!("\nHow to fix:\n");
             for hint in &diagnostics.fix_hints {
                 for line in hint.lines() {
@@ -546,8 +548,8 @@ async fn cmd_doctor(rest: &[String]) -> i32 {
                 }
                 println!();
             }
+            println!("Some checks failed. See 'How to fix' above, or re-run with --fix.");
         }
-        println!("Some checks failed. See 'How to fix' above, or re-run with --fix.");
         return 1;
     }
 
