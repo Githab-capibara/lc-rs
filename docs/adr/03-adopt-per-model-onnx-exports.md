@@ -31,7 +31,7 @@ The exports are not uniform, and that shapes the whole design:
 | Language ID | self-contained ECAPA-TDNN graph | the whole front-end | the windowing and the vote tally |
 | Parakeet | `nemo128` + encoder + decoder/joint | the mel front-end as its own graph | the TDT greedy search |
 | Nemotron | encoder + decoder + joint, int8 | *no* feature extractor | the NeMo mel front-end and the streaming chunk layout |
-| Qwen3-ASR | encoder + `decoder_init` + `decoder_step`, int4 | *no* feature extractor, embeddings in a side file | the Whisper mel front-end, the prompt builder, the KV-cache loop |
+| Qwen3-ASR | encoder + `decoder_init` + `decoder_step`, fp32 | *no* feature extractor, embeddings in a side file | the Whisper mel front-end, the prompt builder, the KV-cache loop |
 
 Two of the four exports ship their own front-end; two do not. The Nemotron
 and Qwen front-ends therefore had to be reconstructed from the model cards
@@ -48,8 +48,11 @@ in `src/models.rs`:
   download at all;
 - `parakeet-tdt-0.6b-v3` — `istupakov/parakeet-tdt-0.6b-v3-onnx`;
 - `nemotron-3.5-asr-streaming-0.6b` — `DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu`;
-- `qwen3-asr-0.6b` — `andrewleech/qwen3-asr-0.6b-onnx`, with the int4
-  decoder graphs plus `decoder_weights.int4.data` and `embed_tokens.bin`.
+- `qwen3-asr-0.6b` — `andrewleech/qwen3-asr-0.6b-onnx`, with the fp32
+  decoder graphs plus `decoder_weights.data` and `embed_tokens.bin`; the
+  quantised export is registered separately, under
+  `qwen3-asr-0.6b-int4`, and is documented in
+  [adr/10-ship-the-fp32-qwen-decoder.md](10-ship-the-fp32-qwen-decoder.md).
 
 The front-ends that the exports omit are implemented in Rust on top of
 `rustfft` (`src/ml/features.rs`), and each one is validated against the
@@ -77,9 +80,11 @@ transcript of the Nemotron export.
   Qwen encoder consumes a fixed 3000-frame mel; the Parakeet encoder
   consumes the features of the whole utterance. These are contracts, not
   conventions, and they are documented per backend in `docs/design/`.
-- **Harder:** the int4 Qwen decoder is a lossy approximation of the fp32
-  checkpoint the Python implementation ran. The transcripts are semantically
-  equal but not character-identical.
+- **Harder:** the ONNX decoder is not the PyTorch checkpoint the reference
+  implementation ran, so the transcripts are not character-identical. With
+  the fp32 decoder the word error rate against the reference's own
+  transcript is 0.267; with the quantised one it is 0.533, which is why the
+  fp32 export is the default.
 - **Given up:** the ability to run the exact `bfloat16` PyTorch weights
   without an ONNX export. No export was available for the language
   identifier in its original form, so the graph is embedded instead.

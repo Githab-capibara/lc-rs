@@ -294,8 +294,10 @@ fn required_models(language: &str, force_model: Option<&str>) -> Vec<String> {
     }
     let code = pipeline::normalize_language(language);
     if code == "auto" {
+        // The optional variants are not required by the default routing.
         return models::known_models()
             .iter()
+            .filter(|spec| !spec.optional)
             .map(|spec| spec.key.to_string())
             .collect();
     }
@@ -629,6 +631,8 @@ fn model_list() -> i32 {
         let size = doctor::format_size_mb(row.spec.approx_size_mb);
         let status = if row.installed {
             "✅ installed"
+        } else if row.spec.optional {
+            "optional — not installed"
         } else {
             "not installed"
         };
@@ -710,7 +714,12 @@ fn model_info(key: &str) -> i32 {
 /// `lc-rs model download`.
 async fn model_download(key: Option<String>, all: bool, force: bool) -> i32 {
     let specs: Vec<&'static models::ModelSpec> = if all {
-        models::known_models().iter().collect()
+        // `--all` fetches the models the default routing needs. An optional
+        // variant is a deliberate choice, never a default.
+        models::known_models()
+            .iter()
+            .filter(|spec| !spec.optional)
+            .collect()
     } else if let Some(key) = key {
         match models::get_model(&key) {
             Ok(spec) => vec![spec],

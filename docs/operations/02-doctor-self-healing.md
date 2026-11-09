@@ -79,11 +79,14 @@ A CUDA-enabled build reports `(CUDA)` here.
 ### The models
 
 Every registered checkpoint is checked for completeness, and the row
-reports the size and the description.
+reports the size and the description. An optional variant is reported as
+optional and never makes the check fail — its row carries a `➖` instead
+of a `❌`.
 
 ```text
 Models:
-  ✅ qwen3-asr-0.6b (~2.0 GB)  (Qwen3-ASR 0.6B — Russian (WER 5.13))
+  ✅ qwen3-asr-0.6b (~4.0 GB)  (Qwen3-ASR 0.6B — Russian (WER 5.13), fp32 decoder)
+  ➖ qwen3-asr-0.6b-int4 (~2.0 GB)  (optional — not installed (encoder.onnx, ...); Qwen3-ASR 0.6B — Russian, quantised decoder (smaller, less faithful))
 ```
 
 ## `--fix`

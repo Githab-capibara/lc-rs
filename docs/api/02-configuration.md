@@ -84,6 +84,15 @@ $XDG_DATA_HOME/lc-rs/
 │   │   └── langid_inline.onnx
 │   ├── qwen3-asr-0.6b/
 │   │   ├── config.json
+│   │   ├── decoder_init.onnx
+│   │   ├── decoder_step.onnx
+│   │   ├── decoder_weights.data
+│   │   ├── embed_tokens.bin
+│   │   ├── encoder.onnx
+│   │   ├── preprocessor_config.json
+│   │   └── tokenizer.json
+│   ├── qwen3-asr-0.6b-int4/       (optional — the quantised decoder)
+│   │   ├── config.json
 │   │   ├── decoder_init.int4.onnx
 │   │   ├── decoder_step.int4.onnx
 │   │   ├── decoder_weights.int4.data

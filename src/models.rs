@@ -18,6 +18,12 @@ use crate::paths;
 pub const MODEL_LANGID: &str = "langid-ecapa";
 /// Registry key of the Russian ASR model.
 pub const MODEL_QWEN: &str = "qwen3-asr-0.6b";
+/// Registry key of the quantised variant of the Russian ASR model.
+///
+/// The same Qwen3-ASR export with an int4 decoder: a third of the decoder
+/// weights and half the memory, at the cost of a lower transcription
+/// fidelity. See ADR 10.
+pub const MODEL_QWEN_INT4: &str = "qwen3-asr-0.6b-int4";
 /// Registry key of the English ASR model.
 pub const MODEL_PARAKEET: &str = "parakeet-tdt-0.6b-v3";
 /// Registry key of the multilingual ASR model.
@@ -61,6 +67,12 @@ pub struct ModelSpec {
     pub approx_size_mb: u64,
     /// Artefacts that make up the checkpoint.
     pub files: &'static [ModelFile],
+    /// Whether the model is required for the default routing.
+    ///
+    /// An optional model is a *variant* of another one: it is never
+    /// downloaded by `--all` and its absence never makes a check fail. It
+    /// is listed so that a user can pick it deliberately.
+    pub optional: bool,
 }
 
 impl ModelSpec {
@@ -94,7 +106,62 @@ const LANGID_FILES: &[ModelFile] = &[ModelFile {
     sha256: "b4a7a328af0e9b75eb23bffc24d7b03d3dae0c28e758230cd9b6c68a39a3797c",
 }];
 
+/// The artefacts of the Qwen3-ASR export.
+///
+/// The decoder is the fp32 one: the reference implementation loads the
+/// model with `dtype=torch.float32`, so the fp32 graphs are the faithful
+/// counterpart of the reference. The int4 decoder halves the memory and
+/// the download at the price of the fidelity — it is registered separately
+/// under [`MODEL_QWEN_INT4`].
 const QWEN_FILES: &[ModelFile] = &[
+    ModelFile {
+        name: "encoder.onnx",
+        size: 745_762_694,
+        sha256: "3c027f880f677615de85e1f6934906e1d5d77624b724096d33accef99c753eed",
+    },
+    ModelFile {
+        name: "decoder_init.onnx",
+        size: 286_310,
+        sha256: "9d43df2bd332f039422bcf77b4ddfd09c8d15d334879d4ed316727b0eb06e57f",
+    },
+    ModelFile {
+        name: "decoder_step.onnx",
+        size: 285_813,
+        sha256: "c5bb74a3758cd2e2e1bbb0c0b075b368fcca900a087cf688cf7909576b6c497a",
+    },
+    ModelFile {
+        name: "decoder_weights.data",
+        size: 3_006_500_864,
+        sha256: "98ea738a3453fada779aa6c0f6e05489f6ca4da26f3861c8af74637d5d03a3b0",
+    },
+    ModelFile {
+        name: "embed_tokens.bin",
+        size: 311_164_928,
+        sha256: "e80150119fa5f7e56e85aed64c3a02d5c78eb7a37cfdcb973d0987316f15bee2",
+    },
+    ModelFile {
+        name: "tokenizer.json",
+        size: 11_429_377,
+        sha256: "bd2a97b55c8f7f9c328c73ee9b9178771037e9f566dfca8e238a063d41cbac92",
+    },
+    ModelFile {
+        name: "config.json",
+        size: 1_250,
+        sha256: "df31c4689abe9d782366fffd2454b546291d0205d082b3fd01b99fb76a45b11f",
+    },
+    ModelFile {
+        name: "preprocessor_config.json",
+        size: 298,
+        sha256: "9c7c558a05f326fe4365e5e59e486383ff127dfd93ce1cd5e6e23f883cd02281",
+    },
+];
+
+/// The artefacts of the quantised Qwen3-ASR export.
+///
+/// The encoder is *not* quantised upstream — `encoder.int4.onnx` holds the
+/// same fp32 weights as `encoder.onnx` — so the encoder of the plain
+/// export is reused. Only the decoder differs.
+const QWEN_INT4_FILES: &[ModelFile] = &[
     ModelFile {
         name: "encoder.onnx",
         size: 745_762_694,
@@ -222,14 +289,25 @@ const REGISTRY: &[ModelSpec] = &[
         description: "ECAPA-TDNN language identifier, 45 languages (routing)",
         approx_size_mb: 84,
         files: LANGID_FILES,
+        optional: false,
     },
     ModelSpec {
         key: MODEL_QWEN,
         hf_repo: "andrewleech/qwen3-asr-0.6b-onnx",
         role: ROLE_RU,
-        description: "Qwen3-ASR 0.6B — Russian (WER 5.13)",
-        approx_size_mb: 2_030,
+        description: "Qwen3-ASR 0.6B — Russian (WER 5.13), fp32 decoder",
+        approx_size_mb: 4_070,
         files: QWEN_FILES,
+        optional: false,
+    },
+    ModelSpec {
+        key: MODEL_QWEN_INT4,
+        hf_repo: "andrewleech/qwen3-asr-0.6b-onnx",
+        role: ROLE_RU,
+        description: "Qwen3-ASR 0.6B — Russian, quantised decoder (smaller, less faithful)",
+        approx_size_mb: 2_030,
+        files: QWEN_INT4_FILES,
+        optional: true,
     },
     ModelSpec {
         key: MODEL_PARAKEET,
@@ -238,6 +316,7 @@ const REGISTRY: &[ModelSpec] = &[
         description: "NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1)",
         approx_size_mb: 670,
         files: PARAKEET_FILES,
+        optional: false,
     },
     ModelSpec {
         key: MODEL_NEMOTRON,
@@ -246,6 +325,7 @@ const REGISTRY: &[ModelSpec] = &[
         description: "NVIDIA Nemotron 3.5 ASR Streaming 0.6B — 40 languages, int8 graphs",
         approx_size_mb: 1_021,
         files: NEMOTRON_FILES,
+        optional: false,
     },
 ];
 
@@ -305,10 +385,18 @@ pub fn is_installed(key: &str) -> bool {
 }
 
 /// Keys of the models that are not installed.
+///
+/// Without an explicit list only the *required* models are considered: an
+/// optional variant is never demanded, because the default routing works
+/// without it.
 pub fn missing_models(keys: Option<&[String]>) -> Vec<String> {
     let check: Vec<String> = match keys {
         Some(keys) => keys.to_vec(),
-        None => REGISTRY.iter().map(|m| m.key.to_string()).collect(),
+        None => REGISTRY
+            .iter()
+            .filter(|m| !m.optional)
+            .map(|m| m.key.to_string())
+            .collect(),
     };
     check.into_iter().filter(|k| !is_installed(k)).collect()
 }
@@ -632,8 +720,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_has_four_models() {
-        assert_eq!(known_models().len(), 4);
+    fn registry_has_five_models() {
+        assert_eq!(known_models().len(), 5);
+    }
+
+    /// The quantised Qwen variant is a deliberate choice, never a default.
+    #[test]
+    fn only_the_quantised_variant_is_optional() {
+        let optional: Vec<&str> = known_models()
+            .iter()
+            .filter(|spec| spec.optional)
+            .map(|spec| spec.key)
+            .collect();
+        assert_eq!(optional, vec![MODEL_QWEN_INT4]);
+        assert!(!get_model(MODEL_QWEN).unwrap().optional);
+    }
+
+    /// The default check never demands the optional variant.
+    #[test]
+    fn the_optional_variant_is_never_demanded() {
+        assert!(
+            !missing_models(None)
+                .iter()
+                .any(|key| key == MODEL_QWEN_INT4)
+        );
     }
 
     #[test]

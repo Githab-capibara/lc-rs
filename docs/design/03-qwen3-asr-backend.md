@@ -5,7 +5,7 @@
 - **Deciders:** @Githab-capibara
 - **Researcher:** @Githab-capibara
 - **Purpose:** Establishes how the Russian ASR checkpoint is executed, graph by graph.
-- **Feeds into:** [adr/03-adopt-per-model-onnx-exports.md](../adr/03-adopt-per-model-onnx-exports.md), [adr/09-reproduce-the-reference-front-end-quirks.md](../adr/09-reproduce-the-reference-front-end-quirks.md)
+- **Feeds into:** [adr/03-adopt-per-model-onnx-exports.md](../adr/03-adopt-per-model-onnx-exports.md), [adr/10-ship-the-fp32-qwen-decoder.md](../adr/10-ship-the-fp32-qwen-decoder.md), [adr/09-reproduce-the-reference-front-end-quirks.md](../adr/09-reproduce-the-reference-front-end-quirks.md)
 
 ## Flow
 
@@ -15,12 +15,19 @@ exported as three graphs plus two side files:
 | File | Role |
 |---|---|
 | `encoder.onnx` | 128-band log-mel features → 1024-dimensional audio embeddings |
-| `decoder_init.int4.onnx` | prompt + audio embeddings → the first token and the KV cache |
-| `decoder_step.int4.onnx` | one token + the KV cache → the next token and the updated cache |
-| `decoder_weights.int4.data` | the int4 weights of both decoder graphs (external data) |
+| `decoder_init.onnx` | prompt + audio embeddings → the first token and the KV cache |
+| `decoder_step.onnx` | one token + the KV cache → the next token and the updated cache |
+| `decoder_weights.data` | the fp32 weights of both decoder graphs (external data) |
 | `embed_tokens.bin` | the embedding table, raw little-endian `float16`, `[151936, 1024]` |
 | `tokenizer.json` | the BPE tokenizer |
 | `config.json`, `preprocessor_config.json` | the geometry and the front-end parameters |
+
+The quantised export has the same shape with `decoder_init.int4.onnx`,
+`decoder_step.int4.onnx` and `decoder_weights.int4.data`. The loader takes
+the quantised graphs when the directory holds them and the fp32 ones
+otherwise, so the same code path serves both registry keys. The fp32
+decoder is the default; see
+[adr/10-ship-the-fp32-qwen-decoder.md](../adr/10-ship-the-fp32-qwen-decoder.md).
 
 The backend lives in `src/ml/qwen.rs` and runs in five steps.
 
@@ -120,6 +127,12 @@ maximum absolute deviation over a 6-second fixture is `1.1e-4` and the mean
 deviation is `5.2e-7`, which is the `float32` rounding of the reference
 computation. The check lives in `tests/features_parity.rs` and compares
 against a fixture captured from the reference extractor.
+
+The decoder is validated against the reference implementation's own
+transcript of the same fixture: the word error rate is 0.267 for the fp32
+export and 0.533 for the int4 one. The measurements, the method and the
+decision are in
+[adr/10-ship-the-fp32-qwen-decoder.md](../adr/10-ship-the-fp32-qwen-decoder.md).
 
 The end-to-end behaviour is checked in `tests/asr_golden.rs`:
 

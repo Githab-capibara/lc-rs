@@ -5,8 +5,13 @@
 //! | Graph | Purpose |
 //! |-------|---------|
 //! | `encoder.onnx` | 128-band log-mel features → 1024-dimensional audio embeddings |
-//! | `decoder_init.int4.onnx` | prompt + audio embeddings → first token and the KV cache |
-//! | `decoder_step.int4.onnx` | one token + the KV cache → next token and the updated cache |
+//! | `decoder_init.onnx` | prompt + audio embeddings → first token and the KV cache |
+//! | `decoder_step.onnx` | one token + the KV cache → next token and the updated cache |
+//!
+//! The quantised export has the same shape with `decoder_init.int4.onnx`
+//! and `decoder_step.int4.onnx`; both layouts are loaded by the same code
+//! path. The registry ships the fp32 one — see
+//! [`crate::models`] and ADR 10.
 //!
 //! The front-end is the `transformers` `WhisperFeatureExtractor`: 30 s of audio
 //! at 16 kHz, 128 mel bands, `log10` with a dynamic-range clamp. The prompt
@@ -20,7 +25,7 @@
 //! `language {Name}<asr_text>`, otherwise the model emits the language itself
 //! in the same shape and the transcript follows the tag.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ort::session::Session;
 use ort::value::Tensor;
@@ -124,6 +129,25 @@ impl std::fmt::Debug for Qwen {
     }
 }
 
+/// Locate one decoder graph in a checkpoint directory.
+///
+/// The registry ships the fp32 decoder — `decoder_init.onnx` next to
+/// `decoder_weights.data` — because it is the counterpart of what the
+/// reference implementation computes. The same model also exists as a
+/// quantised export, whose graphs are named `decoder_init.int4.onnx`.
+/// Both are accepted, so that a quantised export can be measured against
+/// the fp32 one without touching the registry.
+///
+/// The quantised graph is preferred when both are present, because a
+/// directory that holds it was deliberately prepared for it.
+fn decoder_graph(dir: &Path, stem: &str) -> PathBuf {
+    let quantised = dir.join(format!("{stem}.int4.onnx"));
+    if quantised.is_file() {
+        return quantised;
+    }
+    dir.join(format!("{stem}.onnx"))
+}
+
 impl Qwen {
     /// Load the three graphs, the tokenizer and the embedding table.
     pub fn load(dir: &Path) -> Result<Self> {
@@ -134,9 +158,9 @@ impl Qwen {
                 config.encoder.num_mel_bins, config.mel.n_mels
             )));
         }
-        let encoder = ml::load_session(&dir.join("encoder.onnx"))?;
-        let decoder_init = ml::load_session(&dir.join("decoder_init.int4.onnx"))?;
-        let decoder_step = ml::load_session(&dir.join("decoder_step.int4.onnx"))?;
+        let encoder = ml::load_session(dir.join("encoder.onnx"))?;
+        let decoder_init = ml::load_session(decoder_graph(dir, "decoder_init"))?;
+        let decoder_step = ml::load_session(decoder_graph(dir, "decoder_step"))?;
         let tokenizer = Tokenizer::from_file(dir.join("tokenizer.json"))
             .map_err(|e| Error::Model(format!("could not load the Qwen tokenizer: {e}")))?;
         let embeddings = Embeddings::load(
@@ -685,5 +709,32 @@ mod tests {
     fn finds_the_argmax() {
         assert_eq!(argmax(&[1.0, 5.0, 2.0]), 1);
         assert_eq!(argmax(&[3.0]), 0);
+    }
+
+    /// The quantised decoder is preferred when the directory holds it.
+    #[test]
+    fn the_quantised_decoder_graph_is_preferred() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        let stem = dir.path().join("decoder_init");
+        assert_eq!(
+            decoder_graph(dir.path(), "decoder_init"),
+            stem.with_extension("onnx")
+        );
+
+        std::fs::write(stem.with_extension("int4.onnx"), b"x").expect("a graph");
+        assert_eq!(
+            decoder_graph(dir.path(), "decoder_init"),
+            stem.with_extension("int4.onnx")
+        );
+    }
+
+    /// A directory without the quantised graphs falls back to the fp32 ones.
+    #[test]
+    fn the_fp32_decoder_graph_is_the_fallback() {
+        let dir = tempfile::tempdir().expect("a temporary directory");
+        assert_eq!(
+            decoder_graph(dir.path(), "decoder_step"),
+            dir.path().join("decoder_step.onnx")
+        );
     }
 }

@@ -73,15 +73,15 @@ fn configure_session(
 }
 
 /// Load an ONNX graph from disk.
-pub fn load_session(path: &Path) -> Result<Session> {
+pub fn load_session(path: impl AsRef<Path>) -> Result<Session> {
     let env = environment()?;
     let mut builder = configure_session(
         Session::builder(&env)
             .map_err(|e| Error::Onnx(format!("could not create a session builder: {e}")))?,
     )?;
     builder
-        .commit_from_file(path)
-        .map_err(|e| Error::Onnx(format!("could not load {}: {e}", path.display())))
+        .commit_from_file(path.as_ref())
+        .map_err(|e| Error::Onnx(format!("could not load {}: {e}", path.as_ref().display())))
 }
 
 /// Load an ONNX graph from memory.

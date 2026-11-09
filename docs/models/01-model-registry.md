@@ -4,8 +4,8 @@
 - **Date:** 2026-11-09
 - **Deciders:** @Githab-capibara
 - **Researcher:** @Githab-capibara
-- **Purpose:** Documents the four checkpoints, their provenance and how they are fetched.
-- **Feeds into:** [adr/03-adopt-per-model-onnx-exports.md](../adr/03-adopt-per-model-onnx-exports.md), [design/02-model-selection.md](../design/02-model-selection.md)
+- **Purpose:** Documents the checkpoints, their provenance and how they are fetched.
+- **Feeds into:** [adr/03-adopt-per-model-onnx-exports.md](../adr/03-adopt-per-model-onnx-exports.md), [adr/10-ship-the-fp32-qwen-decoder.md](../adr/10-ship-the-fp32-qwen-decoder.md), [design/02-model-selection.md](../design/02-model-selection.md)
 
 ## The registry
 
@@ -16,13 +16,36 @@ exact size and SHA-256.
 | Key | Role | Repository | Size |
 |---|---|---|---|
 | `langid-ecapa` | language-id | embedded in the binary (exported from `speechbrain/lang-id-commonlanguage_ecapa`) | 84 MB |
-| `qwen3-asr-0.6b` | russian | `andrewleech/qwen3-asr-0.6b-onnx` | 2 030 MB |
+| `qwen3-asr-0.6b` | russian | `andrewleech/qwen3-asr-0.6b-onnx` | 4 070 MB |
+| `qwen3-asr-0.6b-int4` | russian | `andrewleech/qwen3-asr-0.6b-onnx` | 2 030 MB |
 | `parakeet-tdt-0.6b-v3` | english | `istupakov/parakeet-tdt-0.6b-v3-onnx` | 670 MB |
 | `nemotron-3.5-asr-streaming-0.6b` | multilingual | `DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu` | 1 021 MB |
+
+`qwen3-asr-0.6b-int4` is **optional**: it is a second, quantised export of
+the same model, not a model the routing needs. `--all` never downloads it
+and its absence never fails a check. See
+[ADR 10](../adr/10-ship-the-fp32-qwen-decoder.md) for the measurements
+behind the choice.
 
 ## The artefacts
 
 ### `qwen3-asr-0.6b`
+
+| File | Size | SHA-256 (first 16) |
+|---|---|---|
+| `encoder.onnx` | 745 762 694 | `3c027f880f677615` |
+| `decoder_init.onnx` | 286 310 | `9d43df2bd332f039` |
+| `decoder_step.onnx` | 285 813 | `c5bb74a3758cd2e2` |
+| `decoder_weights.data` | 3 006 500 864 | `98ea738a3453fada` |
+| `embed_tokens.bin` | 311 164 928 | `e80150119fa5f7e5` |
+| `tokenizer.json` | 11 429 377 | `bd2a97b55c8f7f9c` |
+| `config.json` | 1 250 | `df31c4689abe9d78` |
+| `preprocessor_config.json` | 298 | `9c7c558a05f326fe` |
+
+### `qwen3-asr-0.6b-int4`
+
+The same encoder, the same tokenizer and the same embedding table; only the
+decoder is quantised.
 
 | File | Size | SHA-256 (first 16) |
 |---|---|---|
@@ -34,6 +57,9 @@ exact size and SHA-256.
 | `tokenizer.json` | 11 429 377 | `bd2a97b55c8f7f9c` |
 | `config.json` | 1 250 | `df31c4689abe9d78` |
 | `preprocessor_config.json` | 298 | `9c7c558a05f326fe` |
+
+The loader picks the quantised graphs when a directory holds them and the
+fp32 ones otherwise, so both directories work with the same code path.
 
 The full digests are in `src/models.rs`; they are verified on every
 download.

@@ -107,7 +107,8 @@ Model runtimes:
 
 Models:
   ✅ langid-ecapa (~84 MB)  (ECAPA-TDNN language identifier, 45 languages (routing))
-  ✅ qwen3-asr-0.6b (~2.0 GB)  (Qwen3-ASR 0.6B — Russian (WER 5.13))
+  ✅ qwen3-asr-0.6b (~4.0 GB)  (Qwen3-ASR 0.6B — Russian (WER 5.13), fp32 decoder)
+  ✅ qwen3-asr-0.6b-int4 (~2.0 GB)  (Qwen3-ASR 0.6B — Russian, quantised decoder (smaller, less faithful))
   ✅ parakeet-tdt-0.6b-v3 (~670 MB)  (NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1))
   ✅ nemotron-3.5-asr-streaming-0.6b (~1021 MB)  (NVIDIA Nemotron 3.5 ASR Streaming 0.6B — 40 languages, int8 graphs)
 
@@ -118,7 +119,9 @@ The cookie row reflects the real state of the machine: a browser only
 counts when its cookie database exists, so a machine without a logged-in
 browser shows `❌ cookies (none — see LCRS_YTDLP_COOKIES / --cookies)`.
 
-Exit code `0` when every check passed, `1` otherwise.
+Exit code `0` when every check passed, `1` otherwise. An optional model
+variant that is not installed is reported with a `➖` and does not make the
+sweep fail.
 
 ## `lc-rs model`
 
@@ -136,10 +139,15 @@ Models used by lc-rs:
   Key                             Role                Size   Status
   --------------------------------------------------------   -----------
   langid-ecapa                    language-id        84 MB   ✅ installed
-  qwen3-asr-0.6b                  russian           2.0 GB   ✅ installed
+  qwen3-asr-0.6b                  russian           4.0 GB   ✅ installed
+  qwen3-asr-0.6b-int4             russian           2.0 GB   ✅ installed
   parakeet-tdt-0.6b-v3            english             670 MB   ✅ installed
   nemotron-3.5-asr-streaming-0.6b multilingual     1021 MB   ✅ installed
 ```
+
+`qwen3-asr-0.6b-int4` is an optional variant of the Russian model: the
+`--all` download does not fetch it, and `doctor` reports it as optional
+rather than as a missing model.
 
 ## `lc-rs search`
 

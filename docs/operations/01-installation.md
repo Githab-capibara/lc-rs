@@ -15,7 +15,7 @@
 | `ffmpeg` | re-encodes the media into 16 kHz mono WAV |
 | `yt-dlp` | downloads the media from a URL |
 | a SOCKS5 proxy (usually Tor) | every outbound request goes through it |
-| ~3.8 GB of disk | the four checkpoints |
+| ~5.8 GB of disk | the four required checkpoints |
 
 `ffmpeg` and `yt-dlp` are found on `PATH`; `lc-rs doctor --fix` can install
 them through the host's package manager.
@@ -72,13 +72,25 @@ an interrupted download can simply be repeated.
 | Model | Size |
 |---|---|
 | `langid-ecapa` | 84 MB (embedded in the binary) |
-| `qwen3-asr-0.6b` | 2 030 MB |
+| `qwen3-asr-0.6b` | 4 070 MB |
+| `qwen3-asr-0.6b-int4` | 2 030 MB (optional) |
 | `parakeet-tdt-0.6b-v3` | 670 MB |
 | `nemotron-3.5-asr-streaming-0.6b` | 1 021 MB |
 
 A run only needs the model it routes to — unless the language is `auto`, in
 which case any of the three ASR models may be needed, so all of them
 should be installed.
+
+The optional `qwen3-asr-0.6b-int4` is the same model with a quantised
+decoder: it downloads a third of the decoder weights and runs in half the
+memory, at the cost of the fidelity. It is never fetched by `--all`; ask
+for it by name when the machine cannot afford the 7.2 GiB the fp32
+decoder needs:
+
+```bash
+lc-rs model download qwen3-asr-0.6b-int4
+lc-rs talk.mp3 --model qwen3-asr-0.6b-int4
+```
 
 ## Tor
 

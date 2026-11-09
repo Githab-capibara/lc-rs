@@ -1,6 +1,6 @@
 //! End-to-end checks of the three ASR backends against reference transcripts.
 //!
-//! These tests need the model checkpoints (~3.5 GB in total), so they are
+//! These tests need the model checkpoints (~5.8 GB in total), so they are
 //! ignored by default. Run them explicitly once the models are installed:
 //!
 //! ```text
@@ -99,6 +99,14 @@ fn qwen_transcribes_the_ukrainian_sample() {
     assert!(
         result.text.contains("пытаешься"),
         "unexpected transcript: {}",
+        result.text
+    );
+    // The reference implementation hears «країна» in this fixture, and so
+    // does the fp32 decoder. The quantised one hears «страна» instead, so
+    // this assertion also pins the fidelity of the default export.
+    assert!(
+        result.text.to_lowercase().contains("краина"),
+        "the transcript lost the reference wording: {}",
         result.text
     );
     assert_eq!(result.language.as_deref(), Some("Russian"));

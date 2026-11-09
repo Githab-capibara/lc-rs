@@ -169,9 +169,9 @@ impl StreamState {
 impl Nemotron {
     /// Load the three graphs and the vocabulary from `dir`.
     pub fn load(dir: &Path) -> Result<Self> {
-        let encoder = ml::load_session(&dir.join("encoder.onnx"))?;
-        let decoder = ml::load_session(&dir.join("decoder.onnx"))?;
-        let joint = ml::load_session(&dir.join("joint.onnx"))?;
+        let encoder = ml::load_session(dir.join("encoder.onnx"))?;
+        let decoder = ml::load_session(dir.join("decoder.onnx"))?;
+        let joint = ml::load_session(dir.join("joint.onnx"))?;
         let (vocab, blank_idx) = read_vocab(&dir.join("vocab.txt"))?;
         Ok(Self {
             encoder,

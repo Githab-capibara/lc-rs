@@ -34,6 +34,12 @@ pub struct Check {
     pub ok: bool,
     /// Extra detail (a path, a version, a hint).
     pub detail: String,
+    /// Whether the check is advisory.
+    ///
+    /// An advisory check reports a state that is *allowed* but worth
+    /// mentioning — an optional model variant that is not installed, for
+    /// instance. It never turns the sweep into a failure.
+    pub advisory: bool,
 }
 
 /// Gaps that `--fix` can repair.
@@ -69,14 +75,23 @@ pub struct Diagnostics {
 
 impl Diagnostics {
     /// Whether every check passed.
+    ///
+    /// An advisory check is allowed to fail: it reports an optional piece
+    /// that is not installed, which is a legitimate state.
     pub fn all_ok(&self) -> bool {
-        self.checks.iter().all(|check| check.ok)
+        self.checks.iter().all(|check| check.ok || check.advisory)
     }
 }
 
 /// Render a check line the way the Python implementation did.
 fn line(check: &Check) -> String {
-    let mark = if check.ok { "✅" } else { "❌" };
+    let mark = if check.ok {
+        "✅"
+    } else if check.advisory {
+        "➖"
+    } else {
+        "❌"
+    };
     if check.detail.is_empty() {
         format!("  {mark} {}", check.label)
     } else {
@@ -104,11 +119,13 @@ pub async fn run() -> Diagnostics {
         label: "\u{1}System tools".to_string(),
         ok: true,
         detail: String::new(),
+        advisory: false,
     });
     diagnostics.checks.push(Check {
         label: "lc-rs".to_string(),
         ok: true,
         detail: crate::VERSION.to_string(),
+        advisory: false,
     });
     for (tool, hint, gap) in [
         (
@@ -136,6 +153,7 @@ pub async fn run() -> Diagnostics {
                 Some(path) => path.display().to_string(),
                 None => format!("missing — {hint}"),
             },
+            advisory: false,
         });
     }
 
@@ -144,12 +162,14 @@ pub async fn run() -> Diagnostics {
         label: "\u{1}Downloader".to_string(),
         ok: true,
         detail: String::new(),
+        advisory: false,
     });
     match downloader::yt_dlp_path() {
         Ok(path) => diagnostics.checks.push(Check {
             label: "yt-dlp".to_string(),
             ok: true,
             detail: path.display().to_string(),
+            advisory: false,
         }),
         Err(err) => {
             diagnostics.gaps.ytdlp = true;
@@ -157,6 +177,7 @@ pub async fn run() -> Diagnostics {
                 label: "yt-dlp".to_string(),
                 ok: false,
                 detail: format!("missing — {err}"),
+                advisory: false,
             });
         }
     }
@@ -166,6 +187,7 @@ pub async fn run() -> Diagnostics {
         label: "\u{1}Network".to_string(),
         ok: true,
         detail: String::new(),
+        advisory: false,
     });
     let proxy = config::proxy();
     let reachable = proxy_reachable(&proxy).await;
@@ -180,6 +202,7 @@ pub async fn run() -> Diagnostics {
                 "not reachable"
             }
         ),
+        advisory: false,
     });
     if !reachable {
         diagnostics.fix_hints.push(format!(
@@ -194,6 +217,7 @@ pub async fn run() -> Diagnostics {
         label: "\u{1}YouTube / Tor bot-check mitigations".to_string(),
         ok: true,
         detail: String::new(),
+        advisory: false,
     });
     let cookies = downloader::detect_cookies();
     diagnostics.checks.push(Check {
@@ -203,6 +227,7 @@ pub async fn run() -> Diagnostics {
             Some(source) => describe_cookie_source(source),
             None => "none — see LCRS_YTDLP_COOKIES / --cookies".to_string(),
         },
+        advisory: false,
     });
     let can_rotate = net::rotate_tor_circuit().await;
     diagnostics.checks.push(Check {
@@ -213,6 +238,7 @@ pub async fn run() -> Diagnostics {
         } else {
             "unavailable — SIGNAL NEWNYM not reachable (Tor control port 9051?)".to_string()
         },
+        advisory: false,
     });
     if cookies.is_none() {
         diagnostics.fix_hints.push(
@@ -243,6 +269,7 @@ pub async fn run() -> Diagnostics {
         label: "\u{1}Model runtimes".to_string(),
         ok: true,
         detail: String::new(),
+        advisory: false,
     });
     match crate::ml::environment() {
         Ok(_) => diagnostics.checks.push(Check {
@@ -256,11 +283,13 @@ pub async fn run() -> Diagnostics {
                     "CPU"
                 }
             ),
+            advisory: false,
         }),
         Err(err) => diagnostics.checks.push(Check {
             label: "onnxruntime".to_string(),
             ok: false,
             detail: err.to_string(),
+            advisory: false,
         }),
     }
 
@@ -269,11 +298,12 @@ pub async fn run() -> Diagnostics {
         label: "\u{1}Models".to_string(),
         ok: true,
         detail: String::new(),
+        advisory: false,
     });
     let statuses = models::list_status();
     let mut any_missing = false;
     for row in &statuses {
-        if !row.installed {
+        if !row.installed && !row.spec.optional {
             any_missing = true;
         }
         diagnostics.checks.push(Check {
@@ -285,9 +315,16 @@ pub async fn run() -> Diagnostics {
             ok: row.installed,
             detail: if row.installed {
                 row.spec.description.to_string()
+            } else if row.spec.optional {
+                format!(
+                    "optional — not installed ({}); {}",
+                    row.missing.join(", "),
+                    row.spec.description
+                )
             } else {
                 format!("missing: {}", row.missing.join(", "))
             },
+            advisory: row.spec.optional && !row.installed,
         });
     }
     if any_missing {
@@ -542,7 +579,46 @@ mod tests {
             label: "ffmpeg".to_string(),
             ok: false,
             detail: "missing".to_string(),
+            advisory: false,
         };
         assert_eq!(line(&check), "  ❌ ffmpeg  (missing)");
+    }
+
+    /// An advisory check is reported differently and never fails the sweep.
+    #[test]
+    fn an_advisory_check_does_not_fail_the_sweep() {
+        let check = Check {
+            label: "qwen3-asr-0.6b-int4".to_string(),
+            ok: false,
+            detail: "optional — not installed".to_string(),
+            advisory: true,
+        };
+        assert_eq!(
+            line(&check),
+            "  ➖ qwen3-asr-0.6b-int4  (optional — not installed)"
+        );
+
+        let diagnostics = Diagnostics {
+            checks: vec![check],
+            fix_hints: Vec::new(),
+            gaps: Gaps::default(),
+        };
+        assert!(diagnostics.all_ok());
+    }
+
+    /// A real failure still fails the sweep.
+    #[test]
+    fn a_real_failure_fails_the_sweep() {
+        let diagnostics = Diagnostics {
+            checks: vec![Check {
+                label: "ffmpeg".to_string(),
+                ok: false,
+                detail: "missing".to_string(),
+                advisory: false,
+            }],
+            fix_hints: Vec::new(),
+            gaps: Gaps::default(),
+        };
+        assert!(!diagnostics.all_ok());
     }
 }

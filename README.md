@@ -67,8 +67,10 @@ install -Dm755 target/release/lc-rs ~/.local/bin/lc-rs
 lc-rs doctor --fix          # install ffmpeg / yt-dlp, fetch the checkpoints
 ```
 
-Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, and ~3.8 GB of disk for the
-four checkpoints. See [docs/operations/01-installation.md](docs/operations/01-installation.md).
+Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, and ~5.8 GB of disk for the
+four required checkpoints. The optional quantised variant of the Russian
+model adds 2.0 GB. See
+[docs/operations/01-installation.md](docs/operations/01-installation.md).
 
 ### With CUDA
 
@@ -123,9 +125,16 @@ Every flag is documented in
 | Model | Role | Size | Source |
 |---|---|---|---|
 | `langid-ecapa` | language identification, 45 languages | 84 MB | embedded in the binary |
-| `qwen3-asr-0.6b` | Russian | 2.0 GB | [`andrewleech/qwen3-asr-0.6b-onnx`](https://huggingface.co/andrewleech/qwen3-asr-0.6b-onnx) |
+| `qwen3-asr-0.6b` | Russian | 4.0 GB | [`andrewleech/qwen3-asr-0.6b-onnx`](https://huggingface.co/andrewleech/qwen3-asr-0.6b-onnx) |
+| `qwen3-asr-0.6b-int4` | Russian, quantised — smaller and faster, less faithful | 2.0 GB | [`andrewleech/qwen3-asr-0.6b-onnx`](https://huggingface.co/andrewleech/qwen3-asr-0.6b-onnx) |
 | `parakeet-tdt-0.6b-v3` | English | 670 MB | [`istupakov/parakeet-tdt-0.6b-v3-onnx`](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx) |
 | `nemotron-3.5-asr-streaming-0.6b` | multilingual, 40 languages | 1.0 GB | [`DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu`](https://huggingface.co/DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu) |
+
+`qwen3-asr-0.6b-int4` is optional: `--all` does not fetch it and its
+absence never fails a check. Pick it with
+`lc-rs --model qwen3-asr-0.6b-int4` on a machine that cannot afford the
+7.2 GiB the fp32 decoder needs. The measurements behind the choice are in
+[ADR 10](docs/adr/10-ship-the-fp32-qwen-decoder.md).
 
 ```bash
 lc-rs model download --all

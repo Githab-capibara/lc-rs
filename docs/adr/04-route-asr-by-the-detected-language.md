@@ -54,7 +54,7 @@ The user can bypass the routing in two ways:
   exists anywhere.
 - **Easier:** a deterministic, testable routing contract
   (`ml::asr::model_for_language`, `pipeline::resolve_model`).
-- **Harder:** four checkpoints, ≈ 3.8 GB, on the first install.
+- **Harder:** four checkpoints, ≈ 5.8 GB, on the first install.
 - **Harder:** a low-confidence detection quietly uses the slower
   multilingual model. Accuracy is preferred over speed.
 - **Harder:** the routing is only as good as the classifier. A recording in

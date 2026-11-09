@@ -77,9 +77,9 @@ impl std::fmt::Debug for Parakeet {
 impl Parakeet {
     /// Load the three graphs and the vocabulary from `dir`.
     pub fn load(dir: &Path) -> Result<Self> {
-        let feature = ml::load_session(&dir.join("nemo128.onnx"))?;
-        let encoder = ml::load_session(&dir.join("encoder-model.int8.onnx"))?;
-        let joint = ml::load_session(&dir.join("decoder_joint-model.int8.onnx"))?;
+        let feature = ml::load_session(dir.join("nemo128.onnx"))?;
+        let encoder = ml::load_session(dir.join("encoder-model.int8.onnx"))?;
+        let joint = ml::load_session(dir.join("decoder_joint-model.int8.onnx"))?;
         let vocab = read_vocab(&dir.join("vocab.txt"))?;
         let blank_idx = vocab
             .iter()

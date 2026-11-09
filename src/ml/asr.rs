@@ -91,7 +91,9 @@ pub fn transcribe(model_key: &str, wav_path: &Path, language: &str) -> Result<As
     let samples = crate::audio::read_samples(wav_path)?;
     match model_key {
         models::MODEL_PARAKEET => transcribe_parakeet(&samples, language),
-        models::MODEL_QWEN => transcribe_qwen(&samples, language),
+        models::MODEL_QWEN | models::MODEL_QWEN_INT4 => {
+            transcribe_qwen(&samples, language, model_key)
+        }
         models::MODEL_NEMOTRON => transcribe_nemotron(&samples, language),
         other => Err(Error::Model(format!("Unknown ASR model {other:?}"))),
     }
@@ -126,8 +128,12 @@ fn transcribe_parakeet(samples: &[f32], language: &str) -> Result<AsrResult> {
 }
 
 /// Transcribe with the Qwen3-ASR checkpoint.
-fn transcribe_qwen(samples: &[f32], language: &str) -> Result<AsrResult> {
-    let dir = models::get_model(models::MODEL_QWEN)?.local_dir();
+///
+/// `model_key` selects the export: the fp32 one (`qwen3-asr-0.6b`) or the
+/// quantised one (`qwen3-asr-0.6b-int4`). Both hold the same encoder and
+/// the same tokenizer; only the decoder differs.
+fn transcribe_qwen(samples: &[f32], language: &str, model_key: &str) -> Result<AsrResult> {
+    let dir = models::get_model(model_key)?.local_dir();
     let mut model = ml::qwen::Qwen::load(&dir)?;
     // The model conditions on a full language *name*; codes it does not know
     // fall back to automatic detection, exactly like the reference runner.

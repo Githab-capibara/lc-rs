@@ -14,6 +14,7 @@ context that forced the choice, the choice itself, and its consequences.
 | [07-route-every-outbound-request-through-the-proxy](07-route-every-outbound-request-through-the-proxy.md) | Route every outbound request through the SOCKS5 proxy | Accepted | 2026-11-09 |
 | [08-compile-cuda-support-as-an-opt-in-feature](08-compile-cuda-support-as-an-opt-in-feature.md) | Compile CUDA support as an opt-in cargo feature | Accepted | 2026-11-09 |
 | [09-reproduce-the-reference-front-end-quirks](09-reproduce-the-reference-front-end-quirks.md) | Reproduce the reference implementation's front-end quirks | Accepted | 2026-11-09 |
+| [10-ship-the-fp32-qwen-decoder](10-ship-the-fp32-qwen-decoder.md) | Ship the fp32 Qwen decoder and keep the int4 one as an option | Accepted | 2026-11-09 |
 
 ## The decisions in one paragraph
 
