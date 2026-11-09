@@ -36,17 +36,30 @@ Every outbound request goes through the SOCKS5 proxy configured by
   `ALL_PROXY`, `HTTP_PROXY`, `HTTPS_PROXY` (and their lower-case spellings)
   exported into its environment;
 - the checkpoint download is performed by `reqwest`, whose client is built
-  with a SOCKS5 proxy;
+  with a **custom** proxy: the closure returns the proxy for every URL
+  except the loopback ones. `ClientBuilder::no_proxy()` is deliberately
+  *not* used — it clears the proxy list, so a client built as
+  `proxy(p).no_proxy()` has no proxy at all and every request would leave
+  the machine directly, bypassing Tor;
 - `--no-proxy` sets the proxy to the empty string, which disables it for
-  that run;
+  that run. The proxy variables are then *removed* from the environment of
+  the child process, so a tool that honours the environment does not
+  silently fall back to the ambient `HTTP_PROXY` and keep using a proxy
+  the run asked to drop;
 - `--rotate-tor` asks the Tor control port for a new circuit before the
   download, so the exit address changes;
-- loopback hosts (`localhost`, `127.0.0.1`, `::1`) are always added to
-  `NO_PROXY`, so the local Ollama instance and the proxy itself stay
-  direct.
+- loopback hosts (`localhost`, `127.0.0.1`, `::1`) are always excluded, so
+  the local Ollama instance and the proxy itself stay direct. For `yt-dlp`
+  the exclusion is expressed through `NO_PROXY` in its environment.
 
 The proxy URL is validated before it is used, and only `http`, `https`,
 `socks5` and `socks5h` schemes are accepted.
+
+Five tests hold the policy in place: one proves that a request to a remote
+host reaches the proxy, one that a request to the loopback does not, and
+three that the child process sees the proxy of the run, does not see an
+ambient proxy when the run disabled it, and excludes the loopback hosts
+through `NO_PROXY`.
 
 ## Consequences
 
@@ -67,7 +80,9 @@ The proxy URL is validated before it is used, and only `http`, `https`,
 - **Given up:** a transparent default of "direct connection". The tool
   always tries the proxy first.
 - **Migration:** a machine that does not run Tor either starts one or passes
-  `--no-proxy` / `LCRS_PROXY=""`.
+  `--no-proxy`. An empty `LCRS_PROXY` does *not* disable the proxy — like in
+  the reference implementation, an empty or unset variable falls back to
+  the local Tor instance.
 
 ## Alternatives considered
 

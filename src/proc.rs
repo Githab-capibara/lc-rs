@@ -82,6 +82,36 @@ impl ProcessOutput {
     }
 }
 
+/// Apply the proxy policy to a child process.
+///
+/// `proxy` is the *effective* proxy of the run — the configured one, or the
+/// empty string when the run disabled it. The proxy variables are exported
+/// so that a tool which honours the environment reaches the same proxy as
+/// the tool itself. When the proxy is disabled the variables are *removed*
+/// instead, so the child does not inherit an ambient configuration that
+/// would contradict the policy — otherwise `--no-proxy` would still reach
+/// the network through the proxy, because the environment of the parent
+/// process would still carry `HTTP_PROXY`.
+///
+/// The loopback hosts are excluded through `NO_PROXY`.
+pub fn apply_proxy_env(command: &mut Command, proxy: &str) {
+    if proxy.is_empty() {
+        for key in [
+            "ALL_PROXY",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "all_proxy",
+            "http_proxy",
+            "https_proxy",
+        ] {
+            command.env_remove(key);
+        }
+    }
+    for (key, value) in crate::config::proxy_env_for(proxy) {
+        command.env(key, value);
+    }
+}
+
 /// Run a command with a hard timeout.
 ///
 /// The child is killed when the timeout elapses; the error message then
@@ -99,6 +129,7 @@ pub async fn run_with_timeout(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    apply_proxy_env(&mut command, &crate::config::proxy());
 
     let child = command.spawn().map_err(|e| {
         Error::Dependency(format!(
@@ -152,5 +183,76 @@ mod tests {
             .unwrap();
         assert!(result.success());
         assert_eq!(result.stdout.trim(), "hello");
+    }
+
+    /// The child sees the proxy of the tool, and the loopback hosts are
+    /// excluded.
+    ///
+    /// Without the policy a child inherits whatever the ambient
+    /// environment holds, which may contradict `--no-proxy` — and then the
+    /// download quietly leaves the machine directly.
+    #[tokio::test]
+    async fn the_configured_proxy_reaches_the_child_environment() {
+        let Some(shell) = find_executable("sh") else {
+            return;
+        };
+        let mut command = Command::new(shell);
+        command
+            .arg("-c")
+            .arg("printf '%s' \"${HTTP_PROXY-unset}\"")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        apply_proxy_env(&mut command, "socks5h://127.0.0.1:9050");
+
+        let output = command.output().await.expect("the child must run");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "socks5h://127.0.0.1:9050"
+        );
+    }
+
+    /// A disabled proxy is *removed* from the child environment.
+    ///
+    /// Leaving the ambient `HTTP_PROXY` in place would make `--no-proxy` a
+    /// lie for every tool that honours the environment.
+    #[tokio::test]
+    async fn a_disabled_proxy_is_removed_from_the_child_environment() {
+        let Some(shell) = find_executable("sh") else {
+            return;
+        };
+        let mut command = Command::new(shell);
+        command
+            .arg("-c")
+            .arg("printf '%s' \"${HTTP_PROXY-unset}\"")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        apply_proxy_env(&mut command, "");
+
+        let output = command.output().await.expect("the child must run");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "unset");
+    }
+
+    /// The loopback hosts stay direct for the child.
+    #[tokio::test]
+    async fn the_loopback_hosts_are_excluded_for_the_child() {
+        let Some(shell) = find_executable("sh") else {
+            return;
+        };
+        let mut command = Command::new(shell);
+        command
+            .arg("-c")
+            .arg("printf '%s' \"${NO_PROXY-unset}\"")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        apply_proxy_env(&mut command, "socks5h://127.0.0.1:9050");
+
+        let output = command.output().await.expect("the child must run");
+        let no_proxy = String::from_utf8_lossy(&output.stdout).into_owned();
+        for host in ["localhost", "127.0.0.1", "::1"] {
+            assert!(
+                no_proxy.split(',').any(|h| h.trim() == host),
+                "{host} should be excluded through NO_PROXY, got {no_proxy:?}"
+            );
+        }
     }
 }

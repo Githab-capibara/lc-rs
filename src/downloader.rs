@@ -42,17 +42,51 @@ pub struct DownloadResult {
 
 /// Build an HTTP client that routes through the configured proxy.
 pub fn http_client() -> Result<reqwest::Client> {
+    http_client_with(config::proxy().as_str())
+}
+
+/// Build the HTTP client for a given proxy.
+///
+/// The proxy applies to every request except the ones addressed to the
+/// loopback interface: Ollama, the local Tor instance and the test servers
+/// stay direct.
+///
+/// The exclusion is implemented with a *custom* proxy rather than with
+/// `ClientBuilder::no_proxy()`: that method clears the proxy list
+/// altogether, so calling it after `proxy()` would leave the client with
+/// no proxy at all and every request would leave the machine directly,
+/// bypassing Tor.
+fn http_client_with(proxy: &str) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .user_agent(concat!("lc-rs/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(30))
         .timeout(Duration::from_hours(1));
-    let proxy = config::proxy();
     if !proxy.is_empty() {
-        let proxy = reqwest::Proxy::all(&proxy)
+        // Validate eagerly, so a malformed proxy is reported before the
+        // first request instead of during it.
+        reqwest::Url::parse(proxy)
             .map_err(|e| Error::Usage(format!("invalid proxy URL {proxy:?}: {e}")))?;
-        builder = builder.proxy(proxy).no_proxy();
+        let proxy = proxy.to_string();
+        builder = builder.proxy(reqwest::Proxy::custom(move |url| {
+            if is_loopback_url(url) {
+                None
+            } else {
+                Some(proxy.clone())
+            }
+        }));
     }
     builder.build().map_err(|e| Error::Download(e.to_string()))
+}
+
+/// Whether a URL addresses the loopback interface.
+///
+/// `localhost`, `127.0.0.0/8` and the IPv6 loopback are all local.
+fn is_loopback_url(url: &reqwest::Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost") || host == "::1" || host.starts_with("127.")
 }
 
 /// Build an HTTP client that never uses a proxy (for loopback services).
@@ -342,7 +376,7 @@ pub async fn download_audio(
             cookie_source.as_ref(),
             &clients,
         );
-        let output = run_ytdlp(&program, &args, DOWNLOAD_TIMEOUT).await;
+        let output = run_ytdlp(&program, &args, DOWNLOAD_TIMEOUT, &resolved_proxy).await;
 
         match output {
             Ok(result) => {
@@ -450,7 +484,12 @@ fn build_download_args(
 }
 
 /// Spawn `yt-dlp`, streaming its stderr into the log while capturing stdout.
-async fn run_ytdlp(program: &Path, args: &[String], timeout: Duration) -> Result<ProcessOutput> {
+async fn run_ytdlp(
+    program: &Path,
+    args: &[String],
+    timeout: Duration,
+    proxy: &str,
+) -> Result<ProcessOutput> {
     let mut command = Command::new(program);
     command
         .args(args)
@@ -458,6 +497,7 @@ async fn run_ytdlp(program: &Path, args: &[String], timeout: Duration) -> Result
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
+    crate::proc::apply_proxy_env(&mut command, proxy);
 
     let mut child = command.spawn().map_err(|e| {
         Error::Dependency(format!(
@@ -613,7 +653,7 @@ pub async fn fetch_metadata(
     ];
     if !resolved_proxy.is_empty() {
         args.push("--proxy".to_string());
-        args.push(resolved_proxy);
+        args.push(resolved_proxy.clone());
     }
     match cookie_source {
         Some(CookieSource::File(path)) => {
@@ -629,7 +669,7 @@ pub async fn fetch_metadata(
     args.push("--".to_string());
     args.push(url.to_string());
 
-    let output = run_ytdlp(&program, &args, METADATA_TIMEOUT).await?;
+    let output = run_ytdlp(&program, &args, METADATA_TIMEOUT, &resolved_proxy).await?;
     if !output.success() {
         return Err(Error::Download(
             "yt-dlp could not read the media metadata".to_string(),
@@ -768,5 +808,96 @@ mod tests {
         std::fs::create_dir_all(&firefox).unwrap();
         std::fs::write(firefox.join("cookies.sqlite"), b"sqlite").unwrap();
         assert!(browser_profile_exists_in(home.path(), "firefox"));
+    }
+
+    /// Answer every request with `body`.
+    ///
+    /// The listener is a minimal HTTP/1.1 server: it reads the request
+    /// head, ignores it and answers with a fixed body.
+    async fn spawn_responder(body: &'static str) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("a local listener");
+        let address = listener.local_addr().expect("the local address");
+        let handle = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    return;
+                };
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buffer = [0_u8; 2048];
+                    let _ = stream.read(&mut buffer).await;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.flush().await;
+                });
+            }
+        });
+        (format!("http://{address}"), handle)
+    }
+
+    /// Every request that is not addressed to the loopback goes through the
+    /// proxy.
+    ///
+    /// The bug this guards against is subtle: `ClientBuilder::no_proxy()`
+    /// clears the proxy list, so a client built as
+    /// `proxy(p).no_proxy()` has *no* proxy at all and every request leaves
+    /// the machine directly, bypassing Tor.
+    #[tokio::test]
+    async fn the_proxy_is_used_for_remote_hosts() {
+        let (proxy_url, proxy_handle) = spawn_responder("VIA-PROXY").await;
+        let client = http_client_with(&proxy_url).expect("the client");
+
+        let response = client
+            .get("http://example.invalid/model.bin")
+            .send()
+            .await
+            .expect("the request must reach the proxy");
+        assert_eq!(response.text().await.unwrap(), "VIA-PROXY");
+        proxy_handle.abort();
+    }
+
+    /// A request to the loopback stays direct.
+    #[tokio::test]
+    async fn the_proxy_is_skipped_for_loopback_hosts() {
+        let (proxy_url, proxy_handle) = spawn_responder("VIA-PROXY").await;
+        let (direct_url, direct_handle) = spawn_responder("DIRECT").await;
+        let client = http_client_with(&proxy_url).expect("the client");
+
+        let response = client
+            .get(&direct_url)
+            .send()
+            .await
+            .expect("the request must reach the local server");
+        assert_eq!(response.text().await.unwrap(), "DIRECT");
+        proxy_handle.abort();
+        direct_handle.abort();
+    }
+
+    /// The loopback test covers the hosts the tool actually talks to.
+    #[test]
+    fn loopback_hosts_are_recognised() {
+        for url in [
+            "http://localhost:11434/api/generate",
+            "http://127.0.0.1:9050/",
+            "http://127.0.0.1:12345/",
+            "http://[::1]:8080/",
+        ] {
+            let parsed = reqwest::Url::parse(url).unwrap();
+            assert!(is_loopback_url(&parsed), "{url} should be loopback");
+        }
+        for url in [
+            "https://huggingface.co/model",
+            "http://example.com/",
+            "http://128.0.0.1/",
+            "http://localhost.example.com/",
+        ] {
+            let parsed = reqwest::Url::parse(url).unwrap();
+            assert!(!is_loopback_url(&parsed), "{url} should not be loopback");
+        }
     }
 }

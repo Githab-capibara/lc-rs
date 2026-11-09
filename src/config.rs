@@ -40,18 +40,15 @@ fn env_pair(key: &str) -> Option<String> {
 
 /// Proxy URL used for every outbound request.
 ///
-/// `""` (an explicitly empty `LOCALCAPTION_PROXY`) disables the proxy, which
-/// is how `--no-proxy` is implemented.
+/// An unset or empty variable falls back to the local Tor instance, which
+/// is what the reference implementation does as well. The proxy of a
+/// *run* is disabled by `--no-proxy`, which passes an empty proxy down to
+/// the downloader instead of relying on the environment.
 pub fn proxy() -> String {
     match env_pair("PROXY") {
         Some(value) => value,
         None => DEFAULT_PROXY.to_string(),
     }
-}
-
-/// Whether the configured proxy is disabled.
-pub fn proxy_disabled() -> bool {
-    env_pair("PROXY").is_none() && std::env::var("LCRS_PROXY").is_ok_and(|v| v.trim().is_empty())
 }
 
 /// Explicit Tor control endpoint (`host:port`), if configured.
@@ -124,12 +121,20 @@ pub fn use_cuda() -> bool {
 /// disagree about which they honour. Loopback hosts are added to `NO_PROXY`
 /// so local services (Ollama, the proxy itself) stay direct.
 pub fn proxy_env() -> Vec<(String, String)> {
+    proxy_env_for(&proxy())
+}
+
+/// The proxy environment variables for a given effective proxy.
+///
+/// The proxy is passed in rather than read from the configuration, because
+/// a run may disable it (`--no-proxy`) while the configuration still names
+/// one. The child must see the proxy of the run, not of the configuration.
+pub fn proxy_env_for(proxy: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    let proxy = proxy();
     if !proxy.is_empty() {
         for key in ["ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY"] {
-            out.push((key.to_string(), proxy.clone()));
-            out.push((key.to_ascii_lowercase(), proxy.clone()));
+            out.push((key.to_string(), proxy.to_string()));
+            out.push((key.to_ascii_lowercase(), proxy.to_string()));
         }
     }
     let existing = std::env::var("NO_PROXY").unwrap_or_default();

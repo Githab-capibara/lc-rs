@@ -15,7 +15,7 @@ both are set, `LCRS_` wins.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LCRS_PROXY` / `LOCALCAPTION_PROXY` | `socks5h://127.0.0.1:9050` | the SOCKS5 proxy for every outbound request; an empty value disables the proxy |
+| `LCRS_PROXY` / `LOCALCAPTION_PROXY` | `socks5h://127.0.0.1:9050` | the SOCKS5 proxy for every outbound request; an unset or empty value falls back to the default |
 | `LCRS_TOR_CONTROL` / `LOCALCAPTION_TOR_CONTROL` | — | the Tor control endpoint (`host:port`) used by `--rotate-tor` |
 | `LCRS_TOR_DATADIR` / `LOCALCAPTION_TOR_DATADIR` | — | the directory holding Tor's control cookie |
 | `LCRS_YTDLP_COOKIES` / `LOCALCAPTION_YTDLP_COOKIES` | — | a Netscape cookie jar for `yt-dlp` |
@@ -41,6 +41,16 @@ artefacts — the transcript and the reports the user asked for:
 
 The proxy URL is validated before use. Only the `http`, `https`, `socks5`
 and `socks5h` schemes are accepted.
+
+The proxy applies to every request except the ones addressed to the
+loopback interface (`localhost`, `127.0.0.1`, `::1`), so a local Ollama
+instance and the proxy itself stay direct. The child processes — `yt-dlp`
+above all — inherit the proxy through `ALL_PROXY`, `HTTP_PROXY` and
+`HTTPS_PROXY`, and the loopback hosts are excluded through `NO_PROXY`.
+
+`--no-proxy` disables the proxy **for that run**: the variables are
+removed from the environment of the child processes, so a tool that honours
+the environment does not fall back to an ambient `HTTP_PROXY`.
 
 ## Cookie detection
 
