@@ -649,6 +649,18 @@ pub fn language_name(code: &str) -> Option<&'static str> {
         .map(|(_, name)| *name)
 }
 
+/// The language code, if the model accepts it.
+///
+/// The reference runner keeps a code-to-name table of the same twelve
+/// languages; a code outside that table leaves the model in automatic
+/// detection mode.
+pub fn language_code_for(code: &str) -> Option<&'static str> {
+    LANGUAGE_NAMES
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(code))
+        .map(|(code, _)| *code)
+}
+
 /// The language code of a canonical language name, if it is known.
 pub fn language_code(name: &str) -> Option<&'static str> {
     let lower = name.trim().to_lowercase();

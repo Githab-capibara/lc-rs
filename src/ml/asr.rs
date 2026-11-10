@@ -8,6 +8,11 @@
 //! * anything else (or unclear) → NVIDIA Nemotron 3.5 ASR Streaming 0.6B
 //!
 //! Every model runs in-process through ONNX Runtime.
+//!
+//! The language the artefacts report follows the reference implementation
+//! rather than the routing decision: Parakeet reports `en`, Nemotron
+//! reports `auto` (the reference always runs it in automatic detection
+//! mode), and Qwen reports the language the model itself announced.
 
 use std::path::Path;
 
@@ -28,6 +33,21 @@ pub const NVIDIA_WINDOW_SECONDS: f64 = 45.0;
 /// even though the model itself would accept much longer chunks — matching the
 /// reference keeps the segment boundaries identical.
 pub const QWEN_WINDOW_SECONDS: f64 = 45.0;
+
+/// The language the Parakeet checkpoint reports.
+///
+/// The reference implementation hard-codes English for this checkpoint: the
+/// model is English-only, so the value describes the model, not the audio.
+pub const PARAKEET_LANGUAGE: &str = "en";
+
+/// The language the Nemotron checkpoint reports.
+///
+/// The reference implementation always runs the multilingual checkpoint with
+/// `language="auto"` and reports the mode it used, not the language it
+/// detected. The routing stage has already picked the model, so the language
+/// hint is deliberately ignored — see ADR 11 ("Report the language the way
+/// the reference does").
+pub const NEMOTRON_LANGUAGE: &str = "auto";
 
 /// Outcome of an ASR run.
 #[derive(Debug, Clone, Default)]
@@ -100,7 +120,11 @@ pub fn transcribe(model_key: &str, wav_path: &Path, language: &str) -> Result<As
 }
 
 /// Transcribe with the Parakeet checkpoint.
-fn transcribe_parakeet(samples: &[f32], language: &str) -> Result<AsrResult> {
+///
+/// The language hint is ignored on purpose: the checkpoint is English-only
+/// and the reference implementation reports `en` for it, whatever the audio
+/// contains.
+fn transcribe_parakeet(samples: &[f32], _language: &str) -> Result<AsrResult> {
     let dir = models::get_model(models::MODEL_PARAKEET)?.local_dir();
     let mut model = ml::parakeet::Parakeet::load(&dir)?;
     let mut texts: Vec<String> = Vec::new();
@@ -122,7 +146,7 @@ fn transcribe_parakeet(samples: &[f32], language: &str) -> Result<AsrResult> {
 
     Ok(AsrResult {
         text: texts.join(" ").trim().to_string(),
-        language: language.to_string(),
+        language: PARAKEET_LANGUAGE.to_string(),
         segments,
     })
 }
@@ -138,6 +162,9 @@ fn transcribe_qwen(samples: &[f32], language: &str, model_key: &str) -> Result<A
     // The model conditions on a full language *name*; codes it does not know
     // fall back to automatic detection, exactly like the reference runner.
     model.set_language(ml::qwen::language_name(language));
+    // The code the reference runner falls back to when the model reports no
+    // language of its own.
+    let forced_code = ml::qwen::language_code_for(language);
     let mut texts: Vec<String> = Vec::new();
     let mut segments: Vec<Segment> = Vec::new();
     let mut detected: Option<String> = None;
@@ -161,29 +188,38 @@ fn transcribe_qwen(samples: &[f32], language: &str, model_key: &str) -> Result<A
 
     Ok(AsrResult {
         text: texts.join(" ").trim().to_string(),
-        language: detected_language(detected),
+        language: detected_language(detected, forced_code),
         segments,
     })
 }
 
 /// Turn a detected language name into the code the reference reports.
-fn detected_language(name: Option<String>) -> String {
+///
+/// The reference runner normalises the name the model reports: the twelve
+/// languages the checkpoint knows become their code, every other name is
+/// lower-cased and kept as it is. When the model reports nothing at all, the
+/// forced language is used — and `undetermined` if even that is missing.
+fn detected_language(name: Option<String>, forced: Option<&str>) -> String {
     match name {
         Some(name) => match ml::qwen::language_code(&name) {
             Some(code) => code.to_string(),
             None => name.trim().to_lowercase(),
         },
-        None => "undetermined".to_string(),
+        None => forced.unwrap_or("undetermined").to_string(),
     }
 }
 
 /// Transcribe with the Nemotron checkpoint.
-fn transcribe_nemotron(samples: &[f32], language: &str) -> Result<AsrResult> {
+///
+/// The language hint is ignored on purpose: the reference implementation
+/// always runs this checkpoint with `language="auto"`, so the model picks
+/// the language itself and the artefacts report `auto`.
+fn transcribe_nemotron(samples: &[f32], _language: &str) -> Result<AsrResult> {
     let dir = models::get_model(models::MODEL_NEMOTRON)?.local_dir();
     let mut model = ml::nemotron::Nemotron::load(&dir)?;
     // The model conditions on a language *prompt* rather than a language
-    // string; unknown codes fall back to automatic detection.
-    model.set_language(ml::nemotron::prompt_for_language(language));
+    // string; the reference always asks for automatic detection.
+    model.set_language(ml::nemotron::PROMPT_AUTO);
     let mut texts: Vec<String> = Vec::new();
     let mut segments: Vec<Segment> = Vec::new();
 
@@ -203,7 +239,7 @@ fn transcribe_nemotron(samples: &[f32], language: &str) -> Result<AsrResult> {
 
     Ok(AsrResult {
         text: texts.join(" ").trim().to_string(),
-        language: language.to_string(),
+        language: NEMOTRON_LANGUAGE.to_string(),
         segments,
     })
 }
@@ -218,6 +254,28 @@ mod tests {
         assert_eq!(model_for_language("en"), models::MODEL_PARAKEET);
         assert_eq!(model_for_language("de"), models::MODEL_NEMOTRON);
         assert_eq!(model_for_language("und"), models::MODEL_NEMOTRON);
+    }
+
+    #[test]
+    fn reports_the_language_the_reference_reports() {
+        assert_eq!(PARAKEET_LANGUAGE, "en");
+        assert_eq!(NEMOTRON_LANGUAGE, "auto");
+    }
+
+    #[test]
+    fn normalises_the_detected_language_like_the_reference() {
+        // The twelve languages the checkpoint knows become their code.
+        assert_eq!(detected_language(Some("Russian".to_string()), None), "ru");
+        assert_eq!(detected_language(Some("english".to_string()), None), "en");
+        // Every other name is lower-cased and kept as it is.
+        assert_eq!(
+            detected_language(Some("Ukrainian".to_string()), None),
+            "ukrainian"
+        );
+        // No announcement from the model: the forced language wins, and
+        // without one the language is undetermined.
+        assert_eq!(detected_language(None, Some("ru")), "ru");
+        assert_eq!(detected_language(None, None), "undetermined");
     }
 
     #[test]

@@ -57,23 +57,34 @@ explicit `--model`.
 
 ## Output shape
 
-`resolve_model` returns the pair `(model_key, language_code)`. The code is
-written into every transcript artefact:
+`resolve_model` returns the pair `(model_key, language_code)`. The code
+decides *which* model runs; the language that the artefacts carry is the one
+the reference implementation reports — see
+[adr/11-report-the-language-the-way-the-reference-does.md](../adr/11-report-the-language-the-way-the-reference-does.md):
+
+| Backend | `language` | `language_name` |
+|---|---|---|
+| `parakeet-tdt-0.6b-v3` | `en` | `English` |
+| `nemotron-3.5-asr-streaming-0.6b` | `auto` | `auto` |
+| `qwen3-asr-0.6b` | the code the model announced, else the forced code, else `undetermined` | the matching name |
+
+A Nemotron run therefore writes:
 
 ```json
 {
   "model": "nemotron-3.5-asr-streaming-0.6b",
   "role": "",
-  "language": "uk",
-  "language_name": "Ukrainian",
+  "language": "auto",
+  "language_name": "auto",
   "text": "…",
   "segments": [ … ]
 }
 ```
 
-The Qwen backend is the one exception: it *detects* the language itself and
-reports it, so `transcribe_qwen` overrides the routed code with the model's
-own answer (or `undetermined` when the model did not state one).
+The Qwen backend is the only one that says something about the audio: it
+*detects* the language itself and reports it, so `transcribe_qwen` overrides
+the routed code with the model's own answer (or with the forced code, or
+with `undetermined` when neither is available).
 
 ## Failure modes
 

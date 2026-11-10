@@ -103,7 +103,8 @@ pub struct QwenResult {
 ```
 
 `ml::asr::transcribe_qwen` turns the name into a code (`ru`) and falls back
-to `undetermined` when the model stated no language.
+to the forced language, and then to `undetermined`, when the model stated no
+language — the same chain as the reference runner.
 
 ## Failure modes
 

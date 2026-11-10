@@ -58,14 +58,19 @@ stripped and exactly one trailing newline.
 {
   "model": "nemotron-3.5-asr-streaming-0.6b",
   "role": "",
-  "language": "uk",
-  "language_name": "Ukrainian",
+  "language": "auto",
+  "language_name": "auto",
   "text": "Питаю, що твоя країна може зробити для тебе.",
   "segments": [
     { "start": 0.0, "end": 6.0, "text": "Питаю, що твоя країна може зробити для тебе." }
   ]
 }
 ```
+
+The `language` and `language_name` fields carry the value the reference
+implementation reports — `auto` for the multilingual checkpoint, `en` for
+Parakeet, the detected code for Qwen. The table is in
+[design/02-model-selection.md](02-model-selection.md).
 
 The file name is built by `formatter::output_file`, which appends the suffix
 to the *stem* rather than replacing an existing extension — a media file

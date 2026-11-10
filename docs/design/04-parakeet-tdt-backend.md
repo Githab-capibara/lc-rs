@@ -56,8 +56,9 @@ pub struct ParakeetResult {
 }
 ```
 
-The English model does not detect a language, so the routed code is reported
-unchanged.
+The English model does not detect a language, and the reference
+implementation reports `en` for this checkpoint, so the artefacts carry `en`
+and `English` — whatever the routed code was.
 
 ## Failure modes
 

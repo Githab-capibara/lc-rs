@@ -62,7 +62,7 @@ A run writes into the output directory, named after the media stem:
 | `<stem>.txt` | `--output-format txt` | the plain transcript, one trailing newline |
 | `<stem>.srt` | `--output-format srt` | `SubRip` subtitles, `HH:MM:SS,mmm` clocks |
 | `<stem>.vtt` | `--output-format vtt` | `WebVTT` subtitles, `HH:MM:SS.mmm` clocks |
-| `<stem>.json` | `--output-format json` | `{model, role, language, language_name, text, segments}` |
+| `<stem>.json` | `--output-format json` | `{model, role, language, language_name, text, segments}`; the language is the one the reference reports (`auto`, `en` or the code Qwen detected) |
 | `<stem>.chapters.json` | a source with chapters, format ≠ `md` | the chapter list |
 | `<stem>.chaptered.md` | a source with chapters, format ≠ `md` | the transcript sliced by chapter |
 | `<stem>.summary.md` | `--summary` and a reachable Ollama | the Markdown summary |

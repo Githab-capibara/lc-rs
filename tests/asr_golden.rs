@@ -122,3 +122,32 @@ fn qwen_detects_the_language_when_it_is_not_forced() {
     assert_eq!(result.language.as_deref(), Some("Russian"));
     assert!(!result.text.is_empty());
 }
+
+#[test]
+#[ignore = "needs the Parakeet checkpoint"]
+fn parakeet_reports_english_like_the_reference() {
+    let result =
+        lc_rs::ml::asr::transcribe(MODEL_PARAKEET, &fixture("osr_us_000_0010_16k.wav"), "en")
+            .expect("Parakeet failed");
+    // The reference implementation hard-codes `en` for this checkpoint.
+    assert_eq!(result.language, "en");
+}
+
+#[test]
+#[ignore = "needs the Nemotron checkpoint"]
+fn nemotron_reports_auto_like_the_reference() {
+    let result = lc_rs::ml::asr::transcribe(MODEL_NEMOTRON, &fixture("nemotron_uk.wav"), "uk")
+        .expect("Nemotron failed");
+    // The reference implementation runs this checkpoint with
+    // `language="auto"` and reports that mode, not the routed code.
+    assert_eq!(result.language, "auto");
+}
+
+#[test]
+#[ignore = "needs the Qwen checkpoint"]
+fn qwen_reports_the_language_the_model_announced() {
+    let result = lc_rs::ml::asr::transcribe(MODEL_QWEN, &fixture("nemotron_uk.wav"), "ru")
+        .expect("Qwen failed");
+    // The model announces "Russian"; the artefacts carry its code.
+    assert_eq!(result.language, "ru");
+}

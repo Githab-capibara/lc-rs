@@ -43,6 +43,11 @@ four steps.
    (`PROMPT_AUTO`) means "detect". The prompt is dropped from the text
    assembly, so it never appears in the transcript.
 
+   The pipeline always uses `PROMPT_AUTO`: the reference implementation
+   hard-codes `language="auto"` in the processor call, so the routing code
+   never reaches this checkpoint. See
+   [adr/11-report-the-language-the-way-the-reference-does.md](../adr/11-report-the-language-the-way-the-reference-does.md).
+
 ## Constants
 
 | Constant | Value | Owner |
@@ -68,8 +73,9 @@ pub struct NemotronResult {
 }
 ```
 
-The model does not report a language, so the routed code is reported
-unchanged.
+The model does not report a language, and the reference implementation
+reports `auto` for this checkpoint, so the artefacts carry `auto` and
+`auto` — not the routed code.
 
 ## Failure modes
 
