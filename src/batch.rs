@@ -476,4 +476,37 @@ mod tests {
         assert_eq!(skip_marker_name("abc", "txt"), "abc.txt");
         assert_eq!(skip_marker_name("abc", "all"), "abc.md");
     }
+
+    /// A local file is skipped by the marker before the downloader ever sees
+    /// it, so a queue file that points at existing media does not need a
+    /// network run to confirm resume behaviour.
+    #[tokio::test]
+    async fn skips_local_source_when_the_marker_exists() {
+        let dir = tempdir().unwrap();
+        let media = dir.path().join("episode.wav");
+        std::fs::write(&media, b"not really audio").unwrap();
+
+        let out_dir = dir.path().join("out");
+        let source = expand_tilde(&media).to_string_lossy().into_owned();
+        let video_id = video_id_for(&source);
+        let item_dir = out_dir.join(&video_id);
+        std::fs::create_dir_all(&item_dir).unwrap();
+        std::fs::write(item_dir.join(format!("{video_id}.md")), "done").unwrap();
+
+        let options = PipelineOptions {
+            out_dir,
+            ..Default::default()
+        };
+        let result = transcribe_urls(std::slice::from_ref(&source), &options)
+            .await
+            .unwrap();
+
+        assert_eq!(result.items.len(), 1);
+        let item = &result.items[0];
+        assert_eq!(item.source, source);
+        assert_eq!(item.video_id, video_id);
+        assert_eq!(item.status, "skipped");
+        assert_eq!(item.error, None);
+        assert!(item.elapsed_s.abs() < f64::EPSILON);
+    }
 }

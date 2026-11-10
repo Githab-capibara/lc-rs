@@ -595,6 +595,18 @@ mod tests {
     }
 
     #[test]
+    fn local_file_detection_requires_an_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("clip.wav");
+
+        // A path without a scheme is only local once something is there.
+        assert!(!is_local_file(&path.to_string_lossy()));
+        std::fs::write(&path, b"not really audio").unwrap();
+        assert!(is_local_file(&path.to_string_lossy()));
+        assert!(!is_local_file("https://example.com/watch?v=dQw4w9WgXcQ"));
+    }
+
+    #[test]
     fn resolves_output_formats() {
         assert_eq!(output_formats("md"), vec!["md"]);
         assert_eq!(output_formats("srt"), vec!["srt"]);
