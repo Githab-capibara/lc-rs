@@ -16,7 +16,7 @@
 //! reference implementation shipped with `onnx-asr`.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ort::session::Session;
 use ort::value::Tensor;
@@ -44,6 +44,23 @@ pub struct Token {
     pub start: f64,
     /// End time in seconds.
     pub end: f64,
+}
+
+/// The encoder and the joint graph of a checkpoint directory.
+///
+/// The fp32 export is preferred; the quantised one is the fallback.
+fn graph_paths(dir: &Path) -> (PathBuf, PathBuf) {
+    let encoder = ["encoder-model.onnx", "encoder-model.int8.onnx"]
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| dir.join("encoder-model.onnx"));
+    let joint = ["decoder_joint-model.onnx", "decoder_joint-model.int8.onnx"]
+        .iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| dir.join("decoder_joint-model.onnx"));
+    (encoder, joint)
 }
 
 /// Result of one Parakeet decoding pass.
@@ -76,10 +93,16 @@ impl std::fmt::Debug for Parakeet {
 
 impl Parakeet {
     /// Load the three graphs and the vocabulary from `dir`.
+    ///
+    /// The directory may hold the fp32 export (`encoder-model.onnx` plus
+    /// `encoder-model.onnx.data` and `decoder_joint-model.onnx`) or the
+    /// quantised one (`*.int8.onnx`). The fp32 graphs win when both are
+    /// present; the two exports are interchangeable.
     pub fn load(dir: &Path) -> Result<Self> {
         let feature = ml::load_session(dir.join("nemo128.onnx"))?;
-        let encoder = ml::load_session(dir.join("encoder-model.int8.onnx"))?;
-        let joint = ml::load_session(dir.join("decoder_joint-model.int8.onnx"))?;
+        let (encoder_graph, joint_graph) = graph_paths(dir);
+        let encoder = ml::load_session(encoder_graph)?;
+        let joint = ml::load_session(joint_graph)?;
         let vocab = read_vocab(&dir.join("vocab.txt"))?;
         let blank_idx = vocab
             .iter()
@@ -382,5 +405,25 @@ mod tests {
     fn argmax_finds_the_peak() {
         assert_eq!(argmax(&[1.0, 5.0, 2.0]), 1);
         assert_eq!(argmax(&[3.0]), 0);
+    }
+
+    #[test]
+    fn prefers_the_fp32_graphs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (encoder, joint) = graph_paths(dir.path());
+        assert_eq!(encoder, dir.path().join("encoder-model.onnx"));
+        assert_eq!(joint, dir.path().join("decoder_joint-model.onnx"));
+
+        std::fs::write(dir.path().join("encoder-model.int8.onnx"), b"x").unwrap();
+        std::fs::write(dir.path().join("decoder_joint-model.int8.onnx"), b"x").unwrap();
+        let (encoder, joint) = graph_paths(dir.path());
+        assert_eq!(encoder, dir.path().join("encoder-model.int8.onnx"));
+        assert_eq!(joint, dir.path().join("decoder_joint-model.int8.onnx"));
+
+        std::fs::write(dir.path().join("encoder-model.onnx"), b"x").unwrap();
+        std::fs::write(dir.path().join("decoder_joint-model.onnx"), b"x").unwrap();
+        let (encoder, joint) = graph_paths(dir.path());
+        assert_eq!(encoder, dir.path().join("encoder-model.onnx"));
+        assert_eq!(joint, dir.path().join("decoder_joint-model.onnx"));
     }
 }

@@ -67,9 +67,9 @@ install -Dm755 target/release/lc-rs ~/.local/bin/lc-rs
 lc-rs doctor --fix          # install ffmpeg / yt-dlp, fetch the checkpoints
 ```
 
-Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, and ~5.8 GB of disk for the
-four required checkpoints. The optional quantised variant of the Russian
-model adds 2.0 GB. See
+Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, and ~8.3 GB of disk for the
+four required checkpoints. The optional quantised variants of the Russian
+and the English model add 2.0 GB and 670 MB. See
 [docs/operations/01-installation.md](docs/operations/01-installation.md).
 
 ### With CUDA
@@ -127,14 +127,18 @@ Every flag is documented in
 | `langid-ecapa` | language identification, 45 languages | 84 MB | embedded in the binary |
 | `qwen3-asr-0.6b` | Russian | 4.0 GB | [`andrewleech/qwen3-asr-0.6b-onnx`](https://huggingface.co/andrewleech/qwen3-asr-0.6b-onnx) |
 | `qwen3-asr-0.6b-int4` | Russian, quantised — smaller and faster, less faithful | 2.0 GB | [`andrewleech/qwen3-asr-0.6b-onnx`](https://huggingface.co/andrewleech/qwen3-asr-0.6b-onnx) |
-| `parakeet-tdt-0.6b-v3` | English | 670 MB | [`istupakov/parakeet-tdt-0.6b-v3-onnx`](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx) |
+| `parakeet-tdt-0.6b-v3` | English | 2.5 GB | [`istupakov/parakeet-tdt-0.6b-v3-onnx`](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx) |
+| `parakeet-tdt-0.6b-v3-int8` | English, quantised — smaller, less faithful | 670 MB | [`istupakov/parakeet-tdt-0.6b-v3-onnx`](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx) |
 | `nemotron-3.5-asr-streaming-0.6b` | multilingual, 40 languages | 1.0 GB | [`DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu`](https://huggingface.co/DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu) |
 
-`qwen3-asr-0.6b-int4` is optional: `--all` does not fetch it and its
-absence never fails a check. Pick it with
-`lc-rs --model qwen3-asr-0.6b-int4` on a machine that cannot afford the
-7.2 GiB the fp32 decoder needs. The measurements behind the choice are in
-[ADR 10](docs/adr/10-ship-the-fp32-qwen-decoder.md).
+`qwen3-asr-0.6b-int4` and `parakeet-tdt-0.6b-v3-int8` are optional: `--all`
+does not fetch them and their absence never fails a check. Pick them with
+`lc-rs --model qwen3-asr-0.6b-int4` or
+`lc-rs --model parakeet-tdt-0.6b-v3-int8` on a machine that cannot afford
+the 7.2 GiB the fp32 Qwen decoder and the 2.6 GiB the fp32 Parakeet encoder
+need. The measurements behind the choices are in
+[ADR 10](docs/adr/10-ship-the-fp32-qwen-decoder.md) and
+[ADR 12](docs/adr/12-ship-the-fp32-parakeet-export.md).
 
 ```bash
 lc-rs model download --all

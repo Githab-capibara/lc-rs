@@ -15,10 +15,17 @@ plus the vocabulary:
 | File | Role |
 |---|---|
 | `nemo128.onnx` | waveform → 128-band log-mel features, with NeMo's utterance normalisation baked in |
-| `encoder-model.int8.onnx` | features → encoder states |
-| `decoder_joint-model.int8.onnx` | encoder frame + decoder state → token logits and duration logits |
+| `encoder-model.onnx` (+ `.onnx.data`) | features → encoder states |
+| `decoder_joint-model.onnx` | encoder frame + decoder state → token logits and duration logits |
 | `vocab.txt` | the sentencepiece vocabulary |
 | `config.json` | the model geometry |
+
+The export also publishes the two quantised graphs
+(`encoder-model.int8.onnx`, `decoder_joint-model.int8.onnx`); the loader
+prefers the fp32 ones and falls back to the quantised ones, so both
+registry keys work with the same code path. The fp32 export is the default
+because it reproduces the reference transcript exactly — see
+[ADR 12](../adr/12-ship-the-fp32-parakeet-export.md).
 
 The backend lives in `src/ml/parakeet.rs`.
 
@@ -83,3 +90,16 @@ parakeet_transcribes_the_reference_english_sample ok
 The expectations are substring checks on stable phrases rather than exact
 matches: the fixture is an 8 kHz recording, and the interpolation filter of
 the resampler changes which words the model hears.
+
+With the fp32 export the transcript of the 16 kHz fixture is *identical* to
+the one the reference implementation produced — the golden test pins the
+whole sentence:
+
+```text
+The birch canoe slid on the smooth planks. Glue the sheet to the dark blue
+background. It is easy to tell the depth of a well. …
+```
+
+The quantised export hears «Birch can do it on the food plane» where the
+reference hears «The birch canoe slid on the smooth planks»; its word error
+rate against the reference is 0.469.

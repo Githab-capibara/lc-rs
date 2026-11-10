@@ -109,7 +109,8 @@ Models:
   ✅ langid-ecapa (~84 MB)  (ECAPA-TDNN language identifier, 45 languages (routing))
   ✅ qwen3-asr-0.6b (~4.0 GB)  (Qwen3-ASR 0.6B — Russian (WER 5.13), fp32 decoder)
   ✅ qwen3-asr-0.6b-int4 (~2.0 GB)  (Qwen3-ASR 0.6B — Russian, quantised decoder (smaller, less faithful))
-  ✅ parakeet-tdt-0.6b-v3 (~670 MB)  (NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1))
+  ✅ parakeet-tdt-0.6b-v3 (~2.5 GB)  (NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1), fp32 graphs)
+  ➖ parakeet-tdt-0.6b-v3-int8 (~670 MB)  (NVIDIA Parakeet TDT 0.6B v3 — English, int8 graphs (smaller, less faithful))
   ✅ nemotron-3.5-asr-streaming-0.6b (~1021 MB)  (NVIDIA Nemotron 3.5 ASR Streaming 0.6B — 40 languages, int8 graphs)
 
 All checks passed. You're good to go: lc-rs <url-or-file>
@@ -141,13 +142,14 @@ Models used by lc-rs:
   langid-ecapa                    language-id        84 MB   ✅ installed
   qwen3-asr-0.6b                  russian           4.0 GB   ✅ installed
   qwen3-asr-0.6b-int4             russian           2.0 GB   ✅ installed
-  parakeet-tdt-0.6b-v3            english             670 MB   ✅ installed
+  parakeet-tdt-0.6b-v3            english           2.5 GB   ✅ installed
+  parakeet-tdt-0.6b-v3-int8       english           670 MB   ✅ installed
   nemotron-3.5-asr-streaming-0.6b multilingual     1021 MB   ✅ installed
 ```
 
-`qwen3-asr-0.6b-int4` is an optional variant of the Russian model: the
-`--all` download does not fetch it, and `doctor` reports it as optional
-rather than as a missing model.
+`qwen3-asr-0.6b-int4` and `parakeet-tdt-0.6b-v3-int8` are optional variants
+of the Russian and the English model: the `--all` download does not fetch
+them, and `doctor` reports them as optional rather than as missing models.
 
 ## `lc-rs search`
 

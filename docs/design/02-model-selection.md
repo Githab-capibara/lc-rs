@@ -41,9 +41,10 @@ The routing table:
 | `en` | `parakeet-tdt-0.6b-v3` | English | Open ASR #1 at 0.6B scale |
 | everything else | `nemotron-3.5-asr-streaming-0.6b` | multilingual | 40 languages, int8 graphs, one model for the tail |
 
-The routing never resolves to `qwen3-asr-0.6b-int4`: that key is the
-optional quantised variant of the Russian model, reachable only through an
-explicit `--model`.
+The routing never resolves to `qwen3-asr-0.6b-int4` or to
+`parakeet-tdt-0.6b-v3-int8`: those keys are the optional quantised variants
+of the Russian and the English model, reachable only through an explicit
+`--model`.
 
 ## Constants
 

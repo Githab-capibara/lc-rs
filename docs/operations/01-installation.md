@@ -15,7 +15,7 @@
 | `ffmpeg` | re-encodes the media into 16 kHz mono WAV |
 | `yt-dlp` | downloads the media from a URL |
 | a SOCKS5 proxy (usually Tor) | every outbound request goes through it |
-| ~5.8 GB of disk | the four required checkpoints |
+| ~8.3 GB of disk | the four required checkpoints |
 
 `ffmpeg` and `yt-dlp` are found on `PATH`; `lc-rs doctor --fix` can install
 them through the host's package manager.
@@ -74,7 +74,8 @@ an interrupted download can simply be repeated.
 | `langid-ecapa` | 84 MB (embedded in the binary) |
 | `qwen3-asr-0.6b` | 4 070 MB |
 | `qwen3-asr-0.6b-int4` | 2 030 MB (optional) |
-| `parakeet-tdt-0.6b-v3` | 670 MB |
+| `parakeet-tdt-0.6b-v3` | 2 550 MB |
+| `parakeet-tdt-0.6b-v3-int8` | 670 MB (optional) |
 | `nemotron-3.5-asr-streaming-0.6b` | 1 021 MB |
 
 A run only needs the model it routes to — unless the language is `auto`, in
@@ -90,6 +91,16 @@ decoder needs:
 ```bash
 lc-rs model download qwen3-asr-0.6b-int4
 lc-rs talk.mp3 --model qwen3-asr-0.6b-int4
+```
+
+The optional `parakeet-tdt-0.6b-v3-int8` is the English model with quantised
+encoder and joint graphs: an eighth of the encoder weights and 1.5 GiB
+instead of 2.6 GiB of memory, at the cost of the fidelity — the word error
+rate against the reference transcript rises from 0 to 0.469:
+
+```bash
+lc-rs model download parakeet-tdt-0.6b-v3-int8
+lc-rs talk.mp3 --model parakeet-tdt-0.6b-v3-int8
 ```
 
 ## Tor

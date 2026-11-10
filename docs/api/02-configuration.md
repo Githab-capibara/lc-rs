@@ -102,6 +102,13 @@ $XDG_DATA_HOME/lc-rs/
 │   │   └── tokenizer.json
 │   ├── parakeet-tdt-0.6b-v3/
 │   │   ├── config.json
+│   │   ├── decoder_joint-model.onnx
+│   │   ├── encoder-model.onnx
+│   │   ├── encoder-model.onnx.data
+│   │   ├── nemo128.onnx
+│   │   └── vocab.txt
+│   ├── parakeet-tdt-0.6b-v3-int8/
+│   │   ├── config.json
 │   │   ├── decoder_joint-model.int8.onnx
 │   │   ├── encoder-model.int8.onnx
 │   │   ├── nemo128.onnx

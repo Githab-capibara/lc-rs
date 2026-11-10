@@ -26,6 +26,12 @@ pub const MODEL_QWEN: &str = "qwen3-asr-0.6b";
 pub const MODEL_QWEN_INT4: &str = "qwen3-asr-0.6b-int4";
 /// Registry key of the English ASR model.
 pub const MODEL_PARAKEET: &str = "parakeet-tdt-0.6b-v3";
+/// Registry key of the quantised variant of the English ASR model.
+///
+/// The same Parakeet export with int8 encoder and joint graphs: an eighth of
+/// the encoder weights, at the cost of a much lower transcription fidelity.
+/// See ADR 12.
+pub const MODEL_PARAKEET_INT8: &str = "parakeet-tdt-0.6b-v3-int8";
 /// Registry key of the multilingual ASR model.
 pub const MODEL_NEMOTRON: &str = "nemotron-3.5-asr-streaming-0.6b";
 
@@ -204,7 +210,43 @@ const QWEN_INT4_FILES: &[ModelFile] = &[
     },
 ];
 
+/// Files of the fp32 Parakeet export: the encoder graph with its external
+/// weights, the joint graph, the feature extractor and the vocabulary.
 const PARAKEET_FILES: &[ModelFile] = &[
+    ModelFile {
+        name: "encoder-model.onnx",
+        size: 41_770_866,
+        sha256: "98a74b21b4cc0017c1e7030319a4a96f4a9506e50f0708f3a516d02a77c96bb1",
+    },
+    ModelFile {
+        name: "encoder-model.onnx.data",
+        size: 2_435_420_160,
+        sha256: "9a22d372c51455c34f13405da2520baefb7125bd16981397561423ed32d24f36",
+    },
+    ModelFile {
+        name: "decoder_joint-model.onnx",
+        size: 72_520_893,
+        sha256: "e978ddf6688527182c10fde2eb4b83068421648985ef23f7a86be732be8706c1",
+    },
+    ModelFile {
+        name: "nemo128.onnx",
+        size: 139_764,
+        sha256: "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f",
+    },
+    ModelFile {
+        name: "vocab.txt",
+        size: 93_939,
+        sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+    },
+    ModelFile {
+        name: "config.json",
+        size: 97,
+        sha256: "666903c76b9798caf2c210afd4f6cd60b08a8dbf9800ec8d7a3bc0d2148ac466",
+    },
+];
+
+/// Files of the int8 Parakeet export: the same graphs, quantised.
+const PARAKEET_INT8_FILES: &[ModelFile] = &[
     ModelFile {
         name: "encoder-model.int8.onnx",
         size: 652_183_999,
@@ -313,10 +355,19 @@ const REGISTRY: &[ModelSpec] = &[
         key: MODEL_PARAKEET,
         hf_repo: "istupakov/parakeet-tdt-0.6b-v3-onnx",
         role: ROLE_EN,
-        description: "NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1)",
-        approx_size_mb: 670,
+        description: "NVIDIA Parakeet TDT 0.6B v3 — English (Open ASR #1), fp32 graphs",
+        approx_size_mb: 2_550,
         files: PARAKEET_FILES,
         optional: false,
+    },
+    ModelSpec {
+        key: MODEL_PARAKEET_INT8,
+        hf_repo: "istupakov/parakeet-tdt-0.6b-v3-onnx",
+        role: ROLE_EN,
+        description: "NVIDIA Parakeet TDT 0.6B v3 — English, int8 graphs (smaller, less faithful)",
+        approx_size_mb: 670,
+        files: PARAKEET_INT8_FILES,
+        optional: true,
     },
     ModelSpec {
         key: MODEL_NEMOTRON,
@@ -720,30 +771,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_has_five_models() {
-        assert_eq!(known_models().len(), 5);
+    fn registry_has_six_models() {
+        assert_eq!(known_models().len(), 6);
     }
 
-    /// The quantised Qwen variant is a deliberate choice, never a default.
+    /// The quantised variants are deliberate choices, never defaults.
     #[test]
-    fn only_the_quantised_variant_is_optional() {
+    fn only_the_quantised_variants_are_optional() {
         let optional: Vec<&str> = known_models()
             .iter()
             .filter(|spec| spec.optional)
             .map(|spec| spec.key)
             .collect();
-        assert_eq!(optional, vec![MODEL_QWEN_INT4]);
+        assert_eq!(optional, vec![MODEL_QWEN_INT4, MODEL_PARAKEET_INT8]);
         assert!(!get_model(MODEL_QWEN).unwrap().optional);
+        assert!(!get_model(MODEL_PARAKEET).unwrap().optional);
     }
 
-    /// The default check never demands the optional variant.
+    /// The default check never demands an optional variant.
     #[test]
     fn the_optional_variant_is_never_demanded() {
-        assert!(
-            !missing_models(None)
-                .iter()
-                .any(|key| key == MODEL_QWEN_INT4)
-        );
+        let missing = missing_models(None);
+        assert!(!missing.iter().any(|key| key == MODEL_QWEN_INT4));
+        assert!(!missing.iter().any(|key| key == MODEL_PARAKEET_INT8));
     }
 
     #[test]

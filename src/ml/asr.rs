@@ -110,7 +110,9 @@ pub fn iter_windows(samples: &[f32], window_s: f64) -> Vec<(f64, f64, Vec<f32>)>
 pub fn transcribe(model_key: &str, wav_path: &Path, language: &str) -> Result<AsrResult> {
     let samples = crate::audio::read_samples(wav_path)?;
     match model_key {
-        models::MODEL_PARAKEET => transcribe_parakeet(&samples, language),
+        models::MODEL_PARAKEET | models::MODEL_PARAKEET_INT8 => {
+            transcribe_parakeet(&samples, language, model_key)
+        }
         models::MODEL_QWEN | models::MODEL_QWEN_INT4 => {
             transcribe_qwen(&samples, language, model_key)
         }
@@ -124,8 +126,11 @@ pub fn transcribe(model_key: &str, wav_path: &Path, language: &str) -> Result<As
 /// The language hint is ignored on purpose: the checkpoint is English-only
 /// and the reference implementation reports `en` for it, whatever the audio
 /// contains.
-fn transcribe_parakeet(samples: &[f32], _language: &str) -> Result<AsrResult> {
-    let dir = models::get_model(models::MODEL_PARAKEET)?.local_dir();
+///
+/// `model_key` selects the export: the fp32 one (`parakeet-tdt-0.6b-v3`) or
+/// the quantised one (`parakeet-tdt-0.6b-v3-int8`).
+fn transcribe_parakeet(samples: &[f32], _language: &str, model_key: &str) -> Result<AsrResult> {
+    let dir = models::get_model(model_key)?.local_dir();
     let mut model = ml::parakeet::Parakeet::load(&dir)?;
     let mut texts: Vec<String> = Vec::new();
     let mut segments: Vec<Segment> = Vec::new();

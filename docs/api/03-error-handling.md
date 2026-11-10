@@ -56,7 +56,7 @@ category prefix of its own.
 $ lc-rs --model nope talk.mp3
 lc-rs: Unknown model: 'nope'
 Run `lc-rs model list` to see the supported models.
-Valid keys: langid-ecapa, qwen3-asr-0.6b, qwen3-asr-0.6b-int4, parakeet-tdt-0.6b-v3, nemotron-3.5-asr-streaming-0.6b
+Valid keys: langid-ecapa, qwen3-asr-0.6b, qwen3-asr-0.6b-int4, parakeet-tdt-0.6b-v3, parakeet-tdt-0.6b-v3-int8, nemotron-3.5-asr-streaming-0.6b
 ```
 
 The key is checked before anything is downloaded, so a typo never starts

@@ -18,14 +18,16 @@ exact size and SHA-256.
 | `langid-ecapa` | language-id | embedded in the binary (exported from `speechbrain/lang-id-commonlanguage_ecapa`) | 84 MB |
 | `qwen3-asr-0.6b` | russian | `andrewleech/qwen3-asr-0.6b-onnx` | 4 070 MB |
 | `qwen3-asr-0.6b-int4` | russian | `andrewleech/qwen3-asr-0.6b-onnx` | 2 030 MB |
-| `parakeet-tdt-0.6b-v3` | english | `istupakov/parakeet-tdt-0.6b-v3-onnx` | 670 MB |
+| `parakeet-tdt-0.6b-v3` | english | `istupakov/parakeet-tdt-0.6b-v3-onnx` | 2 550 MB |
+| `parakeet-tdt-0.6b-v3-int8` | english | `istupakov/parakeet-tdt-0.6b-v3-onnx` | 670 MB |
 | `nemotron-3.5-asr-streaming-0.6b` | multilingual | `DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu` | 1 021 MB |
 
-`qwen3-asr-0.6b-int4` is **optional**: it is a second, quantised export of
-the same model, not a model the routing needs. `--all` never downloads it
-and its absence never fails a check. See
-[ADR 10](../adr/10-ship-the-fp32-qwen-decoder.md) for the measurements
-behind the choice.
+`qwen3-asr-0.6b-int4` and `parakeet-tdt-0.6b-v3-int8` are **optional**: they
+are the quantised exports of two models the routing needs, not models of
+their own. `--all` never downloads them and their absence never fails a
+check. See [ADR 10](../adr/10-ship-the-fp32-qwen-decoder.md) and
+[ADR 12](../adr/12-ship-the-fp32-parakeet-export.md) for the measurements
+behind the choices.
 
 ## The artefacts
 
@@ -65,6 +67,21 @@ The full digests are in `src/models.rs`; they are verified on every
 download.
 
 ### `parakeet-tdt-0.6b-v3`
+
+| File | Size |
+|---|---|
+| `encoder-model.onnx` | 41 770 866 |
+| `encoder-model.onnx.data` | 2 435 420 160 |
+| `decoder_joint-model.onnx` | 72 520 893 |
+| `nemo128.onnx` | 139 764 |
+| `vocab.txt` | 93 939 |
+| `config.json` | 97 |
+
+### `parakeet-tdt-0.6b-v3-int8`
+
+The same graphs, quantised. The loader picks the fp32 graphs when a
+directory holds them and the quantised ones otherwise, so both directories
+work with the same code path.
 
 | File | Size |
 |---|---|

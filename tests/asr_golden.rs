@@ -21,6 +21,10 @@ use lc_rs::ml::parakeet::Parakeet;
 use lc_rs::ml::qwen::Qwen;
 use lc_rs::models::{MODEL_NEMOTRON, MODEL_PARAKEET, MODEL_QWEN, get_model};
 
+/// The transcript of the English fixture, as the reference implementation
+/// (`NVIDIA` Parakeet TDT 0.6B v3 in `PyTorch`) produced it.
+const REFERENCE_ENGLISH: &str = "The birch canoe slid on the smooth planks. Glue the sheet to the dark blue background. It is easy to tell the depth of a well. These days a chicken leg is a rare dish. Rice is often served in round bowls. The juice of lemons makes fine punch. The box was thrown beside the park truck. The hogs were fed chopped corn and garbage. Four hours of steady work faced us. A large size in stockings is hard to sell.";
+
 fn fixture(name: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
@@ -42,10 +46,12 @@ fn parakeet_transcribes_the_reference_english_sample() {
     let result = model
         .transcribe(&samples("osr_us_000_0010_16k.wav"))
         .expect("Parakeet failed");
+    // The fp32 export reproduces the reference transcript word for word and
+    // punctuation for punctuation. The quantised export does not: it hears
+    // «Birch can do it on the food plane» where the reference hears «The
+    // birch canoe slid on the smooth planks».
+    assert_eq!(result.text, REFERENCE_ENGLISH);
     let text = result.text.to_lowercase();
-    // The wording is stable across resampling variants, the individual nouns
-    // are not: the 8 kHz source is band-limited, so the model hears slightly
-    // different words depending on the interpolation filter.
     assert!(
         text.contains("glue the sheet"),
         "unexpected transcript: {}",

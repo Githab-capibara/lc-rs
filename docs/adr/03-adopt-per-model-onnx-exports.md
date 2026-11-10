@@ -46,7 +46,10 @@ in `src/models.rs`:
 - `langid-ecapa` — the ECAPA-TDNN classifier, shipped *inside the binary*
   (`assets/langid/langid_inline.onnx`), so the routing stage needs no
   download at all;
-- `parakeet-tdt-0.6b-v3` — `istupakov/parakeet-tdt-0.6b-v3-onnx`;
+- `parakeet-tdt-0.6b-v3` — `istupakov/parakeet-tdt-0.6b-v3-onnx`, with the
+  fp32 encoder and joint graphs; the quantised ones are registered
+  separately, under `parakeet-tdt-0.6b-v3-int8`, and are documented in
+  [adr/12-ship-the-fp32-parakeet-export.md](12-ship-the-fp32-parakeet-export.md);
 - `nemotron-3.5-asr-streaming-0.6b` — `DimQ1/nemotron-3.5-asr-streaming-0.6b-onnx-int8-cpu`;
 - `qwen3-asr-0.6b` — `andrewleech/qwen3-asr-0.6b-onnx`, with the fp32
   decoder graphs plus `decoder_weights.data` and `embed_tokens.bin`; the

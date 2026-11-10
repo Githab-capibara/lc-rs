@@ -16,6 +16,7 @@ context that forced the choice, the choice itself, and its consequences.
 | [09-reproduce-the-reference-front-end-quirks](09-reproduce-the-reference-front-end-quirks.md) | Reproduce the reference implementation's front-end quirks | Accepted | 2026-11-09 |
 | [10-ship-the-fp32-qwen-decoder](10-ship-the-fp32-qwen-decoder.md) | Ship the fp32 Qwen decoder and keep the int4 one as an option | Accepted | 2026-11-09 |
 | [11-report-the-language-the-way-the-reference-does](11-report-the-language-the-way-the-reference-does.md) | Report the language the way the reference does | Accepted | 2026-11-10 |
+| [12-ship-the-fp32-parakeet-export](12-ship-the-fp32-parakeet-export.md) | Ship the fp32 Parakeet export and keep the int8 one as an option | Accepted | 2026-11-10 |
 
 ## The decisions in one paragraph
 
