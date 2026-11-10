@@ -137,13 +137,13 @@ sweep fail.
 $ lc-rs model list
 Models used by lc-rs:
 
-  Key                             Role                Size   Status
-  --------------------------------------------------------   -----------
-  langid-ecapa                    language-id        84 MB   ✅ installed
-  qwen3-asr-0.6b                  russian           4.0 GB   ✅ installed
-  qwen3-asr-0.6b-int4             russian           2.0 GB   ✅ installed
-  parakeet-tdt-0.6b-v3            english           2.5 GB   ✅ installed
-  parakeet-tdt-0.6b-v3-int8       english           670 MB   ✅ installed
+  Key                           Role                Size   Status
+  ------------------------------------------------------   -----------
+  langid-ecapa                  language-id        84 MB   ✅ installed
+  qwen3-asr-0.6b                russian           4.0 GB   ✅ installed
+  qwen3-asr-0.6b-int4           russian           2.0 GB   ✅ installed
+  parakeet-tdt-0.6b-v3          english           2.5 GB   ✅ installed
+  parakeet-tdt-0.6b-v3-int8     english           670 MB   ✅ installed
   nemotron-3.5-asr-streaming-0.6b multilingual     1021 MB   ✅ installed
 ```
 

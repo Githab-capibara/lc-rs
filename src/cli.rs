@@ -239,6 +239,13 @@ fn init_tracing() {
 
 /// Dispatch on the first argument.
 async fn dispatch(args: &[String]) -> i32 {
+    // The reference implementation prints the usage banner when invoked with
+    // no arguments at all; the transcribe command only complains about a
+    // missing source when the user asked for it explicitly.
+    if args.is_empty() {
+        print_top_level_help();
+        return 2;
+    }
     match args.first().map(String::as_str) {
         Some("doctor") => cmd_doctor(&args[1..]).await,
         Some("model") => cmd_model(&args[1..]).await,
@@ -645,10 +652,10 @@ fn print_model_usage() {
 /// `lc-rs model list`.
 fn model_list() -> i32 {
     println!("Models used by lc-rs:\n");
-    println!("  {:<32}{:<14}{:>10}   Status", "Key", "Role", "Size");
+    println!("  {:<30}{:<14}{:>10}   Status", "Key", "Role", "Size");
     println!(
-        "  {:<32}{:<14}{:>10}   {}",
-        "-".repeat(32),
+        "  {:<30}{:<14}{:>10}   {}",
+        "-".repeat(30),
         "-".repeat(14),
         "-".repeat(10),
         "-".repeat(11)
@@ -663,7 +670,7 @@ fn model_list() -> i32 {
             "not installed"
         };
         println!(
-            "  {:<32}{:<14}{:>10}   {status}",
+            "  {:<30}{:<14}{:>10}   {status}",
             row.spec.key, row.spec.role, size
         );
     }
@@ -873,6 +880,11 @@ fn cmd_search(rest: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn no_arguments_shows_the_top_level_help() {
+        assert_eq!(dispatch(&[]).await, 2);
+    }
 
     #[test]
     fn parses_the_transcribe_flags() {

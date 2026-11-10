@@ -27,7 +27,8 @@ The Python CLI has some quirks that a fresh design would not choose:
 - the transcript echo prints the *Markdown* artefact even in the default
   single-file mode, because the Python implementation points `txt` at the
   Markdown path when it is the only file that was written;
-- `model list` prints the model key in a 32-column column.
+- `model list` prints the model key in a 30-column column, exactly as the
+  reference implementation does.
 
 ## Decision
 
