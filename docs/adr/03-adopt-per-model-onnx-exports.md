@@ -84,10 +84,14 @@ transcript of the Nemotron export.
   consumes the features of the whole utterance. These are contracts, not
   conventions, and they are documented per backend in `docs/design/`.
 - **Harder:** the ONNX decoder is not the PyTorch checkpoint the reference
-  implementation ran, so the transcripts are not character-identical. With
-  the fp32 decoder the word error rate against the reference's own
-  transcript is 0.267; with the quantised one it is 0.533, which is why the
-  fp32 export is the default.
+  implementation ran, so the transcripts are not character-identical. The
+  English path is the exception: the fp32 Parakeet export reproduces the
+  reference transcript word for word (word error rate 0), and the artefacts
+  are byte-identical. The Russian path reaches a word error rate of 0.267
+  with the fp32 decoder and 0.533 with the quantised one, which is why the
+  fp32 export is the default. The multilingual path reaches 0.167 — and
+  there the port is the more accurate of the two: the reference mishears
+  «Питаю» as «Типи то».
 - **Given up:** the ability to run the exact `bfloat16` PyTorch weights
   without an ONNX export. No export was available for the language
   identifier in its original form, so the graph is embedded instead.
