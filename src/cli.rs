@@ -78,18 +78,32 @@ struct TranscribeArgs {
     no_print: bool,
 
     /// yt-dlp cookie source for `YouTube`: a browser name (firefox/chrome/edge/brave/vivaldi) or a Netscape cookie file.
+    ///
+    /// Passed to yt-dlp as `--cookies-from-browser` / `--cookies`.
+    /// Auto-detected if omitted (`LCRS_YTDLP_COOKIES`, then
+    /// `~/.localcaption/yt-dlp-cookies.txt`, then a logged-in browser).
+    /// Useful when `YouTube` raises a `Sign in to confirm you're not a bot`
+    /// block on a Tor exit IP.
     #[arg(long, value_name = "BROWSER_OR_FILE")]
     cookies: Option<String>,
 
     /// Bypass the configured proxy for this run (direct connection).
+    ///
+    /// Useful when the Tor exit is flagged but your direct line is clean.
     #[arg(long)]
     no_proxy: bool,
 
     /// Request a fresh Tor exit circuit before downloading.
+    ///
+    /// Automatically done when a bot-check block is detected; use this to
+    /// force it. Requires the Tor control port (default 9051).
     #[arg(long)]
     rotate_tor: bool,
 
     /// Only transcribe the first video in a playlist URL; ignore the rest.
+    ///
+    /// By default a URL with `&list=` transcribes every video in the list
+    /// (sequentially, with skip-if-already-done).
     #[arg(long)]
     no_playlist: bool,
 
@@ -116,7 +130,10 @@ struct TranscribeArgs {
 
 /// `lc-rs doctor` arguments.
 #[derive(Debug, Parser)]
-#[command(name = "lc-rs doctor", about = "Diagnose a local lc-rs install.")]
+#[command(
+    name = "lc-rs doctor",
+    about = "Diagnose a local lc-rs install: external tools, proxy, model runtimes, and checkpoints. Use --fix to attempt repair."
+)]
 struct DoctorArgs {
     /// Attempt to install missing system tools and download missing models.
     #[arg(long)]
@@ -147,7 +164,7 @@ enum ModelCommand {
         /// Re-download even if the model is already present.
         #[arg(long)]
         force: bool,
-        /// Skip the confirmation prompt.
+        /// Skip the confirmation prompt for --all.
         #[arg(short = 'y', long)]
         yes: bool,
     },
@@ -162,7 +179,7 @@ enum ModelCommand {
     },
     /// Show details about one model.
     Info {
-        /// Model key.
+        /// Model key (e.g. parakeet-tdt-0.6b-v3).
         key: String,
     },
 }

@@ -33,7 +33,7 @@ as well and behaves identically — the subcommands are dispatched by hand in
 | `--output-format <FORMAT>` | `md` | `md`, `txt`, `srt`, `vtt`, `json`, `all`, `full`, `complete` |
 | `--keep-audio` | off | keep the downloaded audio and the intermediate WAV under `<out>/.work/` |
 | `--no-print` | off | do not echo the transcript to stdout |
-| `--cookies <BROWSER_OR_FILE>` | — | a browser name (`firefox`, `chrome`, `edge`, `brave`, `vivaldi`) or a Netscape cookie file |
+| `--cookies <BROWSER_OR_FILE>` | — | a browser name (`firefox`, `chrome`, `edge`, `brave`, `vivaldi`) or a Netscape cookie file; auto-detected when omitted |
 | `--no-proxy` | off | bypass the configured proxy for this run |
 | `--rotate-tor` | off | request a fresh Tor exit circuit before downloading |
 | `--no-playlist` | off | transcribe only the first video of a playlist URL |
