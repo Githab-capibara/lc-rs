@@ -344,10 +344,26 @@ async fn run_pipeline(
     *duration_s = audio::wav_duration_s(&wav);
     *wav_path = Some(wav.clone());
 
-    let (model_key, code) = resolve_model(&options.language, &wav, options.force_model.as_deref())?;
     let out_base = options.out_dir.join(options.stem.clone().unwrap_or(stem));
 
-    let asr = ml::asr::transcribe(&model_key, &wav, &code)?;
+    // Language detection and ASR inference are minutes of blocking CPU work:
+    // ONNX Runtime runs the graphs on its own thread pool and never yields to
+    // an async executor. Running them directly on the runtime starves every
+    // other task on it — the `yt-dlp`/`ffmpeg` timeout futures, the progress
+    // output and Ctrl-C handling all stall for the whole inference.
+    // `spawn_blocking` moves the work onto tokio's blocking pool, which
+    // exists for exactly this, and keeps the executor responsive.
+    let wav_for_inference = wav.clone();
+    let language = options.language.clone();
+    let force_model = options.force_model.clone();
+    let (model_key, asr) = tokio::task::spawn_blocking(move || {
+        let (model_key, code) =
+            resolve_model(&language, &wav_for_inference, force_model.as_deref())?;
+        let asr = ml::asr::transcribe(&model_key, &wav_for_inference, &code)?;
+        Ok::<_, Error>((model_key, asr))
+    })
+    .await
+    .map_err(|e| Error::Transcription(format!("the inference task panicked: {e}")))??;
     let transcripts = write_output_artefacts(
         &out_base,
         &asr.segments,

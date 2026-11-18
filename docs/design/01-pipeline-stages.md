@@ -38,6 +38,38 @@ independently.
    `--summary` is given, `src/summary.rs` posts the transcript to a local
    Ollama instance.
 
+## Reuse and concurrency
+
+Two of those stages are expensive, and they are expensive in a way that a
+batch multiplies:
+
+- **The models are loaded once per process, not once per file.**
+  `ml::cached_model` in `src/ml/mod.rs` keys a process-wide cache by the
+  canonicalised checkpoint directory (or by a name, for the embedded language
+  identifier) and hands out `Arc<Mutex<T>>`. The first caller loads; every
+  later caller locks the same model for the duration of its inference. ONNX
+  Runtime forbids concurrent inference on one session, and a batch is
+  sequential, so the lock never contends — it exists because
+  `Session::run` takes `&mut self`. See
+  [adr/13-load-every-model-once-per-process.md](../adr/13-load-every-model-once-per-process.md).
+- **The front-end tables are cached the same way.** `src/ml/features.rs`
+  keeps the mel filterbank and the Hann window per `MelConfig`, because both
+  depend only on the configuration and were rebuilt on every window. See
+  [adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](../adr/14-fuse-the-mel-front-end-into-the-fft-loop.md).
+
+The two stages that do the work also run where they should: `run_pipeline`
+moves language detection and the transcription into
+`tokio::task::spawn_blocking`, because ONNX Runtime runs its graphs on its
+own thread pool and never yields to an async executor. Running minutes of
+inference directly on the runtime would stall the `ffmpeg` timeout future,
+the progress output and Ctrl-C for the whole inference.
+
+The search index is deliberately *not* cached: a redb writer is exclusive, so
+a process-wide connection would lock every other `lc-rs` invocation out of
+the index for as long as the process lived. `src/search.rs` opens the
+database per call, at the cost of one file open per file — see
+[adr/16-reject-caching-the-redb-connection.md](../adr/16-reject-caching-the-redb-connection.md).
+
 ## Constants
 
 | Constant | Value | Owner |
