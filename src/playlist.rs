@@ -157,10 +157,7 @@ pub async fn expand_playlist(
     tracing::info!(
         "playlist: {} videos{}",
         urls.len(),
-        title
-            .as_ref()
-            .map(|t| format!(" ({t})"))
-            .unwrap_or_default()
+        title.as_ref().map_or_default(|t| format!(" ({t})"))
     );
 
     Ok(PlaylistInfo {

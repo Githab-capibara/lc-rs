@@ -251,8 +251,7 @@ fn segments_from_json(path: &Path) -> Result<Vec<Segment>> {
         let text = entry
             .get("text")
             .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or_default();
+            .map_or_default(str::trim);
         if text.is_empty() {
             continue;
         }

@@ -133,15 +133,13 @@ pub fn video_id_for(source: &str) -> String {
     let tail = parsed
         .as_ref()
         .map(|u| {
-            u.path_segments()
-                .map(|segments| {
-                    segments
-                        .filter(|s| !s.is_empty())
-                        .map(percent_decode)
-                        .collect::<Vec<_>>()
-                        .join("_")
-                })
-                .unwrap_or_default()
+            u.path_segments().map_or_default(|segments| {
+                segments
+                    .filter(|s| !s.is_empty())
+                    .map(percent_decode)
+                    .collect::<Vec<_>>()
+                    .join("_")
+            })
         })
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "video".to_string());

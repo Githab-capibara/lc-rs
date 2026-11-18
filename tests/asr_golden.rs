@@ -126,7 +126,7 @@ fn qwen_detects_the_language_when_it_is_not_forced() {
         .transcribe(&samples("nemotron_uk.wav"))
         .expect("Qwen failed");
     assert_eq!(result.language.as_deref(), Some("Russian"));
-    assert!(!result.text.is_empty());
+    assert!(!result.text.is_empty(), "the transcript must not be empty");
 }
 
 #[test]

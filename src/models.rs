@@ -839,7 +839,10 @@ mod tests {
 
     #[test]
     fn embedded_model_is_always_installed() {
-        assert!(missing_files(MODEL_LANGID).unwrap().is_empty());
+        assert_eq!(
+            missing_files(MODEL_LANGID).unwrap(),
+            Vec::<&ModelFile>::new()
+        );
         assert!(is_installed(MODEL_LANGID));
     }
 

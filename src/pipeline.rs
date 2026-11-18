@@ -317,8 +317,8 @@ async fn run_pipeline(
         let path = std::fs::canonicalize(source).map_err(|e| Error::io(source, e))?;
         media = path.clone();
         info = serde_json::json!({
-            "id": path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
-            "title": path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+            "id": path.file_stem().map_or_default(|s| s.to_string_lossy().into_owned()),
+            "title": path.file_name().map_or_default(|s| s.to_string_lossy().into_owned()),
             "webpage_url": path.to_string_lossy(),
         });
     } else {
@@ -567,8 +567,7 @@ fn build_index_entry(
         .txt
         .as_ref()
         .or(transcripts.md.as_ref())
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default();
+        .map_or_default(|p| p.to_string_lossy().into_owned());
 
     let chapter_entries = chapters
         .iter()
