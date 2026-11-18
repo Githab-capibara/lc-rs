@@ -641,7 +641,7 @@ async fn download_file(
         }
 
         match request.send().await {
-            Ok(response) => {
+            Ok(mut response) => {
                 let status = response.status();
                 if !status.is_success() {
                     last_error = Some(format!("HTTP {status}"));
@@ -679,10 +679,15 @@ async fn download_file(
                     .await
                     .with_path(&tmp)?;
                 use tokio::io::AsyncWriteExt;
-                let mut stream = response.bytes_stream();
-                use futures_util::StreamExt;
-                while let Some(chunk) = stream.next().await {
-                    let chunk = chunk.map_err(|e| Error::Download(format!("{url}: {e}")))?;
+                // `Response::chunk()` is reqwest's own streaming API: it needs
+                // no `futures-util` and no `stream` feature, so the download
+                // path adds no dependency beyond `reqwest` itself. The error is
+                // mapped exactly like the old `StreamExt::next` loop did.
+                while let Some(chunk) = response
+                    .chunk()
+                    .await
+                    .map_err(|e| Error::Download(format!("{url}: {e}")))?
+                {
                     file_out.write_all(&chunk).await.with_path(&tmp)?;
                 }
                 file_out.flush().await.with_path(&tmp)?;
