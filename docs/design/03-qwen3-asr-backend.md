@@ -5,7 +5,7 @@
 - **Deciders:** @Githab-capibara
 - **Researcher:** @Githab-capibara
 - **Purpose:** Establishes how the Russian ASR checkpoint is executed, graph by graph.
-- **Feeds into:** [adr/03-adopt-per-model-onnx-exports.md](../adr/03-adopt-per-model-onnx-exports.md), [adr/10-ship-the-fp32-qwen-decoder.md](../adr/10-ship-the-fp32-qwen-decoder.md), [adr/09-reproduce-the-reference-front-end-quirks.md](../adr/09-reproduce-the-reference-front-end-quirks.md)
+- **Feeds into:** [adr/03-adopt-per-model-onnx-exports.md](../adr/03-adopt-per-model-onnx-exports.md), [adr/10-ship-the-fp32-qwen-decoder.md](../adr/10-ship-the-fp32-qwen-decoder.md), [adr/09-reproduce-the-reference-front-end-quirks.md](../adr/09-reproduce-the-reference-front-end-quirks.md), [adr/13-load-every-model-once-per-process.md](../adr/13-load-every-model-once-per-process.md), [adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](../adr/14-fuse-the-mel-front-end-into-the-fft-loop.md)
 
 ## Flow
 
@@ -74,6 +74,13 @@ The backend lives in `src/ml/qwen.rs` and runs in five steps.
 
    The graphs compute the M-RoPE internally from the two-dimensional
    `position_ids`, so the positions are simply `0, 1, 2, …`.
+
+   The KV cache is the one part of the loop that grows: it is re-sent on
+   every step, so the past keys and values are handed to ONNX Runtime as
+   borrowed tensors (`TensorRef::from_array_view`) instead of being copied
+   into a new owned tensor per step, and only the last position's logits are
+   read — the arg-max is taken off the borrowed output rather than off a copy
+   of the 151 936-entry vocabulary row.
 
 5. **Parsing** (`parse_output`). The generated ids are decoded with the
    tokenizer, the degenerate repetitions are collapsed, and the metadata

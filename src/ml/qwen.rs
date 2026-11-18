@@ -28,7 +28,7 @@
 use std::path::{Path, PathBuf};
 
 use ort::session::Session;
-use ort::value::Tensor;
+use ort::value::{Tensor, TensorRef};
 use serde::Deserialize;
 use tokenizers::Tokenizer;
 
@@ -209,10 +209,9 @@ impl Qwen {
         let features = self.compute_features(samples)?;
         let (audio, audio_len) = self.encode(&features)?;
         let prompt = self.build_prompt(audio_len)?;
-        let (logits, keys, values) = self.prefill(&prompt, &audio, audio_len)?;
+        let (mut next, keys, values) = self.prefill(&prompt, &audio, audio_len)?;
 
         let mut generated: Vec<u32> = Vec::new();
-        let mut next = argmax(&logits);
         let mut position = prompt.len() as i64;
         let mut past_len = prompt.len();
         let (mut keys, mut values) = (keys, values);
@@ -222,13 +221,13 @@ impl Qwen {
                 break;
             }
             generated.push(next as u32);
-            let (logits, new_keys, new_values) =
+            let (following, new_keys, new_values) =
                 self.step(next, position, &keys, &values, past_len)?;
             keys = new_keys;
             values = new_values;
             past_len += 1;
             position += 1;
-            next = argmax(&logits);
+            next = following;
         }
 
         self.parse_output(&generated)
@@ -300,13 +299,14 @@ impl Qwen {
         Ok(encoding.get_ids().iter().map(|&id| i64::from(id)).collect())
     }
 
-    /// Run the decoder over the prompt and return the first-token logits.
+    /// Run the decoder over the prompt and return the first-token argmax and
+    /// the KV cache.
     fn prefill(
         &mut self,
         prompt: &[i64],
         audio: &[f32],
         audio_len: usize,
-    ) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+    ) -> Result<(i64, Vec<f32>, Vec<f32>)> {
         let seq = prompt.len() as i64;
         let input_ids = Tensor::from_array((vec![1_i64, seq], prompt.to_vec()))
             .map_err(|e| ml::onnx_error("could not build the Qwen input-ids tensor", &e))?;
@@ -343,7 +343,11 @@ impl Qwen {
             .try_extract_tensor::<f32>()
             .map_err(|e| ml::onnx_error("could not read the Qwen prefill logits", &e))?;
         let vocab = self.config.decoder.vocab_size;
-        let last = logits[(prompt.len() - 1) * vocab..prompt.len() * vocab].to_vec();
+        // Only the last position's logits are needed, so the argmax is taken
+        // straight off the borrowed output: the previous implementation
+        // copied the whole 151 936-entry row into a `Vec` first.
+        let last = &logits[(prompt.len() - 1) * vocab..prompt.len() * vocab];
+        let first = argmax(last);
         let keys = outputs[1]
             .try_extract_tensor::<f32>()
             .map_err(|e| ml::onnx_error("could not read the Qwen key cache", &e))?
@@ -354,7 +358,7 @@ impl Qwen {
             .map_err(|e| ml::onnx_error("could not read the Qwen value cache", &e))?
             .1
             .to_vec();
-        Ok((last, keys, values))
+        Ok((first, keys, values))
     }
 
     /// Run one decoder step.
@@ -365,7 +369,7 @@ impl Qwen {
         keys: &[f32],
         values: &[f32],
         past_len: usize,
-    ) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+    ) -> Result<(i64, Vec<f32>, Vec<f32>)> {
         let embedding = self
             .embeddings
             .row(token.max(0) as usize)
@@ -384,9 +388,13 @@ impl Qwen {
             past_len as i64,
             self.config.decoder.head_dim as i64,
         ];
-        let past_keys = Tensor::from_array((shape.clone(), keys.to_vec()))
+        // The whole KV cache is re-sent on every step, so the past keys and
+        // values are handed to ONNX Runtime as borrowed tensors
+        // (`TensorRef::from_array_view`): the buffers stay where they are and
+        // no copy of a cache that grows by one entry per step is made.
+        let past_keys = TensorRef::from_array_view((shape.clone(), keys))
             .map_err(|e| ml::onnx_error("could not build the Qwen key-cache tensor", &e))?;
-        let past_values = Tensor::from_array((shape, values.to_vec()))
+        let past_values = TensorRef::from_array_view((shape, values))
             .map_err(|e| ml::onnx_error("could not build the Qwen value-cache tensor", &e))?;
 
         let outputs = self
@@ -402,6 +410,9 @@ impl Qwen {
         let (_, logits) = outputs[0]
             .try_extract_tensor::<f32>()
             .map_err(|e| ml::onnx_error("could not read the Qwen step logits", &e))?;
+        // The vocab-sized row (151 936 floats) is only needed for its argmax,
+        // so it is read in place instead of being copied into a `Vec`.
+        let next = argmax(logits);
         let new_keys = outputs[1]
             .try_extract_tensor::<f32>()
             .map_err(|e| ml::onnx_error("could not read the Qwen key cache", &e))?
@@ -412,7 +423,7 @@ impl Qwen {
             .map_err(|e| ml::onnx_error("could not read the Qwen value cache", &e))?
             .1
             .to_vec();
-        Ok((logits.to_vec(), new_keys, new_values))
+        Ok((next, new_keys, new_values))
     }
 
     /// Whether `token` ends the generation.
