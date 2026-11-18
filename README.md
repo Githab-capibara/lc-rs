@@ -263,6 +263,13 @@ The mel front-end is checked numerically against the reference
 `transformers` extractor (`tests/features_parity.rs`), and the transcripts
 against the reference wording (`tests/asr_golden.rs`).
 
+The front-end's optimisation is pinned by a unit test as well: the
+pre-optimisation implementation is kept in `src/ml/features.rs`'s test module
+as the golden reference, and
+`mel_spectrogram_is_bit_identical_to_the_dense_implementation` compares the
+two bit for bit — the speed-up has to come from the data movement, never
+from the arithmetic.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).

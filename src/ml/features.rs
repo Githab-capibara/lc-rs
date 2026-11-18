@@ -12,6 +12,8 @@
 //! window, reflect padding, `1 + n // hop` frames) so the numbers match the
 //! Python reference bit for bit within floating-point tolerance.
 
+use std::sync::Arc;
+
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex32;
 
@@ -36,7 +38,7 @@ pub enum MelNorm {
 }
 
 /// Configuration of the mel front-end.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MelConfig {
     /// FFT size.
     pub n_fft: usize,
@@ -263,7 +265,8 @@ pub fn log_mel_spectrogram(samples: &[f32], config: &MelConfig) -> Result<MelFea
     };
     let frames = frames.max(1);
 
-    let window = hann_window(config.win_length, config.n_fft);
+    let tables = cached_filters_and_window(config);
+    let (filters, window) = (&tables.0, &tables.1);
     let padded = if config.center {
         reflect_pad(&signal, config.n_fft / 2)
     } else {
@@ -273,36 +276,63 @@ pub fn log_mel_spectrogram(samples: &[f32], config: &MelConfig) -> Result<MelFea
     let mut planner = FftPlanner::<f32>::new();
     let fft = planner.plan_fft_forward(config.n_fft);
     let n_bins = config.n_fft / 2 + 1;
-    let mut spectra: Vec<Vec<f32>> = Vec::with_capacity(frames);
+    // One frame buffer, one FFT scratch buffer and one power buffer are
+    // reused for every frame. The previous implementation allocated a fresh
+    // `Vec<Complex32>` per frame and let `Fft::process` allocate its scratch
+    // internally on each call.
+    let mut buffer: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); config.n_fft];
+    let mut scratch: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+    let mut power: Vec<f32> = vec![0.0_f32; n_bins];
+    // Frame-major mel rows. The mel projection is fused into the FFT loop, so
+    // it reads an L1-resident `power` array instead of a multi-megabyte
+    // `spectra` matrix; the blocked transpose below moves the rows into the
+    // band-major layout the public API promises.
+    let mut rows: Vec<Vec<f32>> = Vec::with_capacity(frames);
 
     for frame in 0..frames {
         let start = frame * config.hop_length;
-        let mut buffer: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); config.n_fft];
-        for (i, slot) in buffer.iter_mut().enumerate() {
-            let value = padded.get(start + i).copied().unwrap_or(0.0) * window[i];
-            *slot = Complex32::new(value, 0.0);
+        if let Some(chunk) = padded.get(start..start + config.n_fft) {
+            for (slot, (&sample, &weight)) in buffer.iter_mut().zip(chunk.iter().zip(window.iter()))
+            {
+                *slot = Complex32::new(sample * weight, 0.0);
+            }
+        } else {
+            for (i, slot) in buffer.iter_mut().enumerate() {
+                let value = padded.get(start + i).copied().unwrap_or(0.0) * window[i];
+                *slot = Complex32::new(value, 0.0);
+            }
         }
-        fft.process(&mut buffer);
-        let mut spectrum = vec![0.0_f32; n_bins];
-        for (bin, value) in spectrum.iter_mut().enumerate() {
-            *value = buffer[bin].norm_sqr();
+        fft.process_with_scratch(&mut buffer, &mut scratch);
+        for (slot, bin) in power.iter_mut().zip(buffer.iter()) {
+            *slot = bin.norm_sqr();
         }
-        spectra.push(spectrum);
+        let mut row = vec![0.0_f32; config.n_mels];
+        for (band, band_filters) in filters.iter().enumerate() {
+            // Each band holds its non-zero filter entries in ascending bin
+            // order, so the accumulation order — and therefore the
+            // floating-point result — is exactly the one the dense
+            // `for bin in 0..n_bins` loop with its zero-skip produced.
+            let mut sum = 0.0_f32;
+            for &(bin, weight) in band_filters {
+                sum += weight * power[bin];
+            }
+            row[band] = sum;
+        }
+        rows.push(row);
     }
 
-    let filters = mel_filterbank(config);
+    // Transpose the frame-major rows into the band-major layout, a
+    // cache-resident block of frames at a time.
     let n_frames = frames;
     let mut data = vec![0.0_f32; config.n_mels * n_frames];
-    for (band, row) in filters.iter().enumerate() {
-        for frame in 0..n_frames {
-            let mut sum = 0.0_f32;
-            for (bin, weight) in row.iter().enumerate() {
-                if *weight == 0.0 {
-                    continue;
-                }
-                sum += weight * spectra[frame][bin];
+    const BLOCK: usize = 64;
+    for block_start in (0..n_frames).step_by(BLOCK) {
+        let block_end = (block_start + BLOCK).min(n_frames);
+        for band in 0..config.n_mels {
+            let destination = &mut data[band * n_frames + block_start..band * n_frames + block_end];
+            for (offset, slot) in destination.iter_mut().enumerate() {
+                *slot = rows[block_start + offset][band];
             }
-            data[band * n_frames + frame] = sum;
         }
     }
 
@@ -349,6 +379,79 @@ fn hann_window(win_length: usize, n_fft: usize) -> Vec<f32> {
         *slot = 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / win_length as f32).cos();
     }
     window
+}
+
+/// The mel filterbank (in sparse form) and the Hann window for one config.
+///
+/// Sparse form means one `(bin, weight)` pair per *non-zero* filter entry: a
+/// 128-band Slaney bank has 128 × 201 = 25 728 dense entries of which about a
+/// third are zero, and skipping the zeros turns the mel projection — the
+/// arithmetic the dense matrix does per frame — into a walk over the entries
+/// that actually contribute.
+type FrontEnd = (Vec<Vec<(usize, f32)>>, Vec<f32>);
+
+/// Process-local cache of the front-end tables.
+///
+/// Both the mel filterbank and the Hann window depend only on the
+/// configuration, never on the samples, yet they were rebuilt on every
+/// `log_mel_spectrogram` call — one rebuild per ASR window, so N redundant
+/// matrix builds in a batch of N files. The configs a run uses are a handful
+/// of constants (`MelConfig::whisper`, `MelConfig::nemo`), so the cache holds
+/// one or two entries and is searched linearly: an exact `MelConfig`
+/// comparison cannot collide, while a hash of the fields silently could.
+type FrontEndCache = std::sync::Mutex<Vec<(MelConfig, Arc<FrontEnd>)>>;
+
+static FRONT_END_CACHE: std::sync::OnceLock<FrontEndCache> = std::sync::OnceLock::new();
+
+/// Upper bound on cached configurations, so a caller that invents a new
+/// config on every call cannot grow the cache without limit.
+const MAX_CACHED_CONFIGS: usize = 8;
+
+/// Cached `(sparse filterbank, window)` for `config`.
+///
+/// The first caller with a given config builds the tables; every later caller
+/// with the same config gets the stored `Arc` without rebuilding them. The
+/// build happens under the lock, so two threads racing on an unseen config
+/// cannot each build their own copy: the tables are built once per config per
+/// process, whatever the call pattern. Building costs microseconds (a 128×201
+/// matrix), so holding the lock across it is free.
+fn cached_filters_and_window(config: &MelConfig) -> Arc<FrontEnd> {
+    let cache = FRONT_END_CACHE.get_or_init(|| std::sync::Mutex::new(Vec::new()));
+    // A poisoned lock carries no hazard here: the stored tables are immutable
+    // once built, so the guard is recovered instead of failing the call.
+    let mut guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some((_, tables)) = guard.iter().find(|(key, _)| key == config) {
+        return Arc::clone(tables);
+    }
+    let tables = Arc::new(sparse_front_end(config));
+    if guard.len() < MAX_CACHED_CONFIGS {
+        guard.push((*config, Arc::clone(&tables)));
+    }
+    tables
+}
+
+/// Build the sparse filterbank and the window for `config`.
+///
+/// The filterbank is stored sparsely: for every band a `Vec<(bin, weight)>`
+/// holding only the non-zero entries (~6 of the 201 bins for a 128-band
+/// whisper bank). The mel projection then touches ~6 bins per band instead
+/// of all 201, and drops the per-element zero test the dense loop needed.
+fn sparse_front_end(config: &MelConfig) -> FrontEnd {
+    let sparse = mel_filterbank(config)
+        .iter()
+        .map(|row| {
+            row.iter()
+                .enumerate()
+                .filter(|(_, weight)| **weight != 0.0)
+                .map(|(bin, weight)| (bin, *weight))
+                .collect()
+        })
+        .collect();
+    let window = hann_window(config.win_length, config.n_fft);
+    (sparse, window)
 }
 
 /// Pad `signal` with `pad` reflected samples on both sides.
@@ -410,5 +513,184 @@ mod tests {
         // torch.stft(center=True) yields 1 + n // hop frames.
         assert_eq!(features.n_frames, 1 + 16_000 / 160);
         assert_eq!(features.data.len(), 128 * features.n_frames);
+    }
+
+    /// Signal preparation of the pre-optimisation implementation, spelled out
+    /// so the reference below stays independent of the production path.
+    #[allow(clippy::cast_precision_loss)] // the dither constants are u64
+    fn reference_prepare(samples: &[f32], config: &MelConfig) -> Vec<f32> {
+        let mut signal: Vec<f32> = Vec::with_capacity(samples.len());
+        if config.preemphasis == 0.0 {
+            signal.extend_from_slice(samples);
+        } else {
+            signal.push(samples.first().copied().unwrap_or(0.0));
+            for pair in samples.windows(2) {
+                signal.push(pair[1] - config.preemphasis * pair[0]);
+            }
+        }
+        if config.dither > 0.0 {
+            let mut state = 0x2545_F491_4F6C_DD1Du64;
+            for sample in &mut signal {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                let uniform = ((state >> 11) as f32 / (1u64 << 53) as f32) - 0.5;
+                *sample += config.dither * uniform;
+            }
+        }
+        signal
+    }
+
+    /// The pre-optimisation `log_mel_spectrogram`, kept as a golden reference:
+    /// a fresh frame buffer and a fresh `Fft::process` scratch per frame, a
+    /// dense band-outer mel triple-loop over the full bin rows, and the
+    /// band-major result written directly.
+    #[allow(clippy::cast_precision_loss)] // mirrors the dither constants
+    fn reference_spectrogram(samples: &[f32], config: &MelConfig) -> Vec<f32> {
+        let signal = reference_prepare(samples, config);
+        let frames = if config.center {
+            signal.len() / config.hop_length + 1
+        } else if signal.len() >= config.n_fft {
+            1 + (signal.len() - config.n_fft) / config.hop_length
+        } else {
+            0
+        }
+        .max(1);
+        let window = hann_window(config.win_length, config.n_fft);
+        let padded = if config.center {
+            reflect_pad(&signal, config.n_fft / 2)
+        } else {
+            signal.clone()
+        };
+        let mut planner = FftPlanner::<f32>::new();
+        let fft = planner.plan_fft_forward(config.n_fft);
+        let n_bins = config.n_fft / 2 + 1;
+        let mut spectra: Vec<Vec<f32>> = Vec::with_capacity(frames);
+        for start in (0..frames).map(|frame| frame * config.hop_length) {
+            let mut buffer: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); config.n_fft];
+            for (i, slot) in buffer.iter_mut().enumerate() {
+                let value = padded.get(start + i).copied().unwrap_or(0.0) * window[i];
+                *slot = Complex32::new(value, 0.0);
+            }
+            fft.process(&mut buffer);
+            let mut spectrum = vec![0.0_f32; n_bins];
+            for (bin, value) in spectrum.iter_mut().enumerate() {
+                *value = buffer[bin].norm_sqr();
+            }
+            spectra.push(spectrum);
+        }
+        let filters = mel_filterbank(config);
+        let n_frames = frames;
+        let mut data = vec![0.0_f32; config.n_mels * n_frames];
+        for (band, row) in filters.iter().enumerate() {
+            for (frame, spectrum) in spectra.iter().enumerate() {
+                let mut sum = 0.0_f32;
+                for (bin, weight) in row.iter().enumerate() {
+                    if *weight == 0.0 {
+                        continue;
+                    }
+                    sum += weight * spectrum[bin];
+                }
+                data[band * n_frames + frame] = sum;
+            }
+        }
+        let mut max_log = f32::NEG_INFINITY;
+        if config.log_range.is_some() {
+            for value in &data {
+                let logged = if config.natural_log {
+                    (*value + config.log_floor).ln()
+                } else {
+                    (*value).max(config.log_floor).log10()
+                };
+                if logged > max_log {
+                    max_log = logged;
+                }
+            }
+        }
+        let threshold = config
+            .log_range
+            .map_or(f32::NEG_INFINITY, |range| max_log - range);
+        for value in &mut data {
+            let mut logged = if config.natural_log {
+                (*value + config.log_floor).ln()
+            } else {
+                (*value).max(config.log_floor).log10()
+            };
+            if logged < threshold {
+                logged = threshold;
+            }
+            *value = (logged + config.log_offset) / config.log_scale;
+        }
+        data
+    }
+
+    /// The fused, sparse and frame-outer hot loop must stay bit-for-bit
+    /// identical to the dense reference above — same bins, same accumulation
+    /// order, same output layout. The bit patterns are compared, so neither
+    /// NaN nor a `-0.0`/`0.0` mix-up can slip through.
+    #[test]
+    fn mel_spectrogram_is_bit_identical_to_the_dense_implementation() {
+        // A deterministic two-tone signal, built with pure `f32` arithmetic
+        // (no integer→float casts) and long enough to exercise the frame
+        // count of both front-ends. NeMo's window (400) is shorter than its
+        // FFT (512), which the zero-padded Hann window covers.
+        let mut samples = Vec::with_capacity(96_000);
+        let (mut phase, mut phase_wide) = (0.0_f32, 0.0_f32);
+        for _ in 0..96_000 {
+            samples.push(phase.sin() * 0.6 + phase_wide.cos() * 0.2);
+            phase += 0.017;
+            phase_wide += 0.31;
+        }
+
+        for config in [MelConfig::whisper(128), MelConfig::nemo(128)] {
+            let optimised = log_mel_spectrogram(&samples, &config).unwrap();
+            let reference = reference_spectrogram(&samples, &config);
+            assert_eq!(
+                optimised.data.len(),
+                reference.len(),
+                "{config:?} produced a different length"
+            );
+            for (index, (got, want)) in optimised.data.iter().zip(reference.iter()).enumerate() {
+                assert_eq!(
+                    got.to_bits(),
+                    want.to_bits(),
+                    "{config:?} differs at index {index}: {got} instead of {want}"
+                );
+            }
+        }
+    }
+
+    /// The front-end tables are rebuilt once per config and shared afterwards:
+    /// the second call must return the very same tables, and two calls must
+    /// agree with a freshly built pair.
+    #[test]
+    fn front_end_tables_are_cached_per_config() {
+        let whisper = MelConfig::whisper(128);
+        let first = cached_filters_and_window(&whisper);
+        let second = cached_filters_and_window(&whisper);
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "the same config must reuse the cached tables"
+        );
+        let fresh = Arc::new(sparse_front_end(&whisper));
+        assert_eq!(first.0, fresh.0, "the cached filterbank drifted");
+        assert_eq!(first.1, fresh.1, "the cached window drifted");
+
+        // A different config is a different entry, not an overwrite.
+        let nemo = MelConfig::nemo(128);
+        let nemo_tables = cached_filters_and_window(&nemo);
+        assert_eq!(nemo_tables.0.len(), 128);
+        assert_ne!(
+            first.0, nemo_tables.0,
+            "whisper and nemo banks must not share an entry"
+        );
+        let nemo_fresh = Arc::new(sparse_front_end(&nemo));
+        assert_eq!(nemo_tables.0, nemo_fresh.0, "the cached nemo bank drifted");
+        assert_eq!(
+            nemo_tables.1, nemo_fresh.1,
+            "the cached nemo window drifted"
+        );
+        // And the first config is still cached afterwards.
+        assert!(Arc::ptr_eq(&first, &cached_filters_and_window(&whisper)));
     }
 }
