@@ -15,10 +15,17 @@
 | `ffmpeg` | re-encodes the media into 16 kHz mono WAV |
 | `yt-dlp` | downloads the media from a URL |
 | a SOCKS5 proxy (usually Tor) | every outbound request goes through it |
+| a C compiler and `cmake` | the TLS provider `reqwest` selects (`aws-lc-rs`) and ONNX Runtime's build-time downloader (`ring`, through `ort`) compile C while the crate builds |
 | ~8.3 GB of disk | the four required checkpoints |
 
 `ffmpeg` and `yt-dlp` are found on `PATH`; `lc-rs doctor --fix` can install
 them through the host's package manager.
+
+No Python, no `torch`, no virtualenv and no model server is needed: the
+inference runs in-process through ONNX Runtime. The C toolchain entry above
+is the only non-Rust build requirement, and it comes from the two crates
+that have no pure-Rust option today — see
+[adr/15-prune-the-dependency-tree.md](../adr/15-prune-the-dependency-tree.md).
 
 ## Building from source
 

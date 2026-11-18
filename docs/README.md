@@ -36,6 +36,9 @@ anywhere.
 | [design/03-qwen3-asr-backend.md](design/03-qwen3-asr-backend.md) | How does the Russian model actually work? |
 | [adr/02-pin-the-onnx-graph-optimisation-level.md](adr/02-pin-the-onnx-graph-optimisation-level.md) | Why is the graph optimisation level pinned to `ORT_ENABLE_ALL`? |
 | [adr/09-reproduce-the-reference-front-end-quirks.md](adr/09-reproduce-the-reference-front-end-quirks.md) | Which reference behaviours are reproduced on purpose? |
+| [adr/13-load-every-model-once-per-process.md](adr/13-load-every-model-once-per-process.md) | Why does a batch load each checkpoint only once? |
+| [adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](adr/14-fuse-the-mel-front-end-into-the-fft-loop.md) | How did the front-end get 4.7× faster without changing a bit? |
+| [adr/16-reject-caching-the-redb-connection.md](adr/16-reject-caching-the-redb-connection.md) | Why is the search index *not* cached the way the models are? |
 | [api/03-error-handling.md](api/03-error-handling.md) | What exit codes and error variants exist? |
 | [operations/02-doctor-self-healing.md](operations/02-doctor-self-healing.md) | What does `lc-rs doctor --fix` do? |
 

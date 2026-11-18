@@ -45,6 +45,14 @@ The backend lives in `src/ml/qwen.rs` and runs in five steps.
    mel_scale="slaney")`, and an HTK filter bank produces a different encoder
    input and therefore a different transcript.
 
+   The front-end itself is shared with Nemotron and lives in
+   `src/ml/features.rs`. Its filterbank and window are cached per
+   configuration, the mel projection is fused into the FFT loop and the
+   filterbank is walked sparsely, which makes a 30-second window 4.7× cheaper
+   than the straightforward implementation — with bit-identical output, which
+   is what the parity test in that module asserts. See
+   [adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](../adr/14-fuse-the-mel-front-end-into-the-fft-loop.md).
+
 2. **Encoder** (`encode`). The mel matrix is fed in band-major layout,
    `[1, 128, 3000]`, matching the graph's input contract. The output is
    `[1, 375, 1024]` — the encoder downsamples the time axis by 8.

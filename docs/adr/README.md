@@ -17,6 +17,10 @@ context that forced the choice, the choice itself, and its consequences.
 | [10-ship-the-fp32-qwen-decoder](10-ship-the-fp32-qwen-decoder.md) | Ship the fp32 Qwen decoder and keep the int4 one as an option | Accepted | 2026-11-09 |
 | [11-report-the-language-the-way-the-reference-does](11-report-the-language-the-way-the-reference-does.md) | Report the language the way the reference does | Accepted | 2026-11-10 |
 | [12-ship-the-fp32-parakeet-export](12-ship-the-fp32-parakeet-export.md) | Ship the fp32 Parakeet export and keep the int8 one as an option | Accepted | 2026-11-10 |
+| [13-load-every-model-once-per-process](13-load-every-model-once-per-process.md) | Load every model once per process | Accepted | 2026-11-19 |
+| [14-fuse-the-mel-front-end-into-the-fft-loop](14-fuse-the-mel-front-end-into-the-fft-loop.md) | Fuse the mel front-end into the FFT loop | Accepted | 2026-11-19 |
+| [15-prune-the-dependency-tree](15-prune-the-dependency-tree.md) | Prune the dependency tree and drop the oniguruma regex engine | Accepted | 2026-11-19 |
+| [16-reject-caching-the-redb-connection](16-reject-caching-the-redb-connection.md) | Reject caching the redb connection | Rejected | 2026-11-19 |
 
 ## The decisions in one paragraph
 
@@ -29,3 +33,20 @@ virtualenvs and the start-up cost disappear. The transcripts therefore stay
 comparable with the reference ones — down to the quirks of its front-ends,
 which are reproduced deliberately and documented rather than silently
 diverging from.
+
+Three later decisions are about paying less for the same output, and they
+share one rule: **the numbers do not move, only the work does.** A
+checkpoint is loaded once per process rather than once per file
+([13](13-load-every-model-once-per-process.md)); the mel front-end is fused
+into the FFT loop and its tables cached, which makes a 30-second window 4.7×
+cheaper without changing a single output bit
+([14](14-fuse-the-mel-front-end-into-the-fft-loop.md)); and the dependency
+tree loses the Oniguruma-backed tokenizer build, which removes a C library
+without changing a single token id ([15](15-prune-the-dependency-tree.md)).
+Each is verified by a parity test rather than by inspection, because a
+faster port that says something different is not a port.
+
+The fourth record is a rejection, kept because the proposal was reasonable
+and the reason it fails is not obvious from the code: the search index is
+*not* cached the way the models are, because a redb writer is exclusive and
+a session is not ([16](16-reject-caching-the-redb-connection.md)).

@@ -73,9 +73,10 @@ install -Dm755 target/release/lc-rs ~/.local/bin/lc-rs
 lc-rs doctor --fix          # install ffmpeg / yt-dlp, fetch the checkpoints
 ```
 
-Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, and ~8.3 GB of disk for the
-four required checkpoints. The optional quantised variants of the Russian
-and the English model add 2.0 GB and 670 MB. See
+Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, a C compiler with `cmake` (the
+TLS provider and ONNX Runtime's build-time downloader compile C), and ~8.3 GB
+of disk for the four required checkpoints. The optional quantised variants of
+the Russian and the English model add 2.0 GB and 670 MB. See
 [docs/operations/01-installation.md](docs/operations/01-installation.md).
 
 ### With CUDA
@@ -229,6 +230,8 @@ Everything lives in [`docs/`](docs) (master index:
 | [docs/adr/02-pin-the-onnx-graph-optimisation-level.md](docs/adr/02-pin-the-onnx-graph-optimisation-level.md) | Why is the optimisation level pinned? |
 | [docs/design/03-qwen3-asr-backend.md](docs/design/03-qwen3-asr-backend.md) | How does the Russian model actually work? |
 | [docs/adr/09-reproduce-the-reference-front-end-quirks.md](docs/adr/09-reproduce-the-reference-front-end-quirks.md) | Which reference behaviours are reproduced on purpose? |
+| [docs/adr/13-load-every-model-once-per-process.md](docs/adr/13-load-every-model-once-per-process.md) | Why does a batch load each checkpoint once, not once per file? |
+| [docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md) | How did the front-end get 4.7× faster without changing a bit? |
 
 ## Development
 
