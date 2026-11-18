@@ -15,11 +15,34 @@
 //! mode), and Qwen reports the language the model itself announced.
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use crate::chapters::Segment;
 use crate::errors::{Error, Result};
 use crate::ml;
 use crate::models;
+
+/// Load the Parakeet checkpoint in `dir`, or reuse the one already loaded.
+///
+/// Before this cache, every file of a batch paid the graph load again: ~4 s
+/// and ~640 MB of weights per file, for a checkpoint that never changes
+/// during the run.
+fn cached_parakeet(dir: &Path) -> Result<Arc<Mutex<ml::parakeet::Parakeet>>> {
+    ml::cached_model(dir, || ml::parakeet::Parakeet::load(dir))
+}
+
+/// Load the Qwen checkpoint in `dir`, or reuse the one already loaded.
+///
+/// The heaviest of the three: ~9 s and several gigabytes per file before the
+/// cache existed.
+fn cached_qwen(dir: &Path) -> Result<Arc<Mutex<ml::qwen::Qwen>>> {
+    ml::cached_model(dir, || ml::qwen::Qwen::load(dir))
+}
+
+/// Load the Nemotron checkpoint in `dir`, or reuse the one already loaded.
+fn cached_nemotron(dir: &Path) -> Result<Arc<Mutex<ml::nemotron::Nemotron>>> {
+    ml::cached_model(dir, || ml::nemotron::Nemotron::load(dir))
+}
 
 /// Window length fed to the NVIDIA models, in seconds.
 ///
@@ -131,7 +154,8 @@ pub fn transcribe(model_key: &str, wav_path: &Path, language: &str) -> Result<As
 /// the quantised one (`parakeet-tdt-0.6b-v3-int8`).
 fn transcribe_parakeet(samples: &[f32], _language: &str, model_key: &str) -> Result<AsrResult> {
     let dir = models::get_model(model_key)?.local_dir();
-    let mut model = ml::parakeet::Parakeet::load(&dir)?;
+    let cached = cached_parakeet(&dir)?;
+    let mut model = ml::lock_model(&cached)?;
     let mut texts: Vec<String> = Vec::new();
     let mut segments: Vec<Segment> = Vec::new();
 
@@ -163,9 +187,13 @@ fn transcribe_parakeet(samples: &[f32], _language: &str, model_key: &str) -> Res
 /// the same tokenizer; only the decoder differs.
 fn transcribe_qwen(samples: &[f32], language: &str, model_key: &str) -> Result<AsrResult> {
     let dir = models::get_model(model_key)?.local_dir();
-    let mut model = ml::qwen::Qwen::load(&dir)?;
+    let cached = cached_qwen(&dir)?;
+    let mut model = ml::lock_model(&cached)?;
     // The model conditions on a full language *name*; codes it does not know
     // fall back to automatic detection, exactly like the reference runner.
+    // `set_language` mutates the shared model, and the shared model outlives
+    // this call — that is safe because every caller re-applies its own
+    // language before the first inference, exactly like this one does.
     model.set_language(ml::qwen::language_name(language));
     // The code the reference runner falls back to when the model reports no
     // language of its own.
@@ -221,9 +249,11 @@ fn detected_language(name: Option<String>, forced: Option<&str>) -> String {
 /// the language itself and the artefacts report `auto`.
 fn transcribe_nemotron(samples: &[f32], _language: &str) -> Result<AsrResult> {
     let dir = models::get_model(models::MODEL_NEMOTRON)?.local_dir();
-    let mut model = ml::nemotron::Nemotron::load(&dir)?;
+    let cached = cached_nemotron(&dir)?;
+    let mut model = ml::lock_model(&cached)?;
     // The model conditions on a language *prompt* rather than a language
-    // string; the reference always asks for automatic detection.
+    // string; the reference always asks for automatic detection. As with
+    // Qwen, the prompt is re-applied by every caller before it infers.
     model.set_language(ml::nemotron::PROMPT_AUTO);
     let mut texts: Vec<String> = Vec::new();
     let mut segments: Vec<Segment> = Vec::new();

@@ -20,6 +20,14 @@ use crate::errors::{Error, Result};
 use crate::languages;
 use crate::ml::{self, wav};
 
+/// Key the embedded graph is cached under.
+///
+/// It is a name rather than a path: the graph is compiled into the binary,
+/// so there is no file to canonicalise. It only has to be unique among the
+/// cached models, which it is by construction (`:` cannot appear in a
+/// checkpoint key).
+const EMBEDDED_GRAPH_KEY: &str = "lc-rs:embedded:langid";
+
 /// The 45 classes of the language-identifier, in graph order.
 pub const LABELS: [&str; 45] = [
     "Basque",
@@ -218,7 +226,13 @@ pub fn detect_language(wav_path: &Path) -> Result<LangIdResult> {
 
 /// Classify the dominant language of raw samples.
 pub fn detect_language_in_samples(samples: &[f32]) -> Result<LangIdResult> {
-    let mut session = ml::load_session_from_memory(embedded_graph())?;
+    // The embedded graph is parsed once per process instead of once per call:
+    // `ml::cached_model` hands out the same session to every caller, and the
+    // lock it guards is taken only for the duration of one inference.
+    let cached = ml::cached_model(EMBEDDED_GRAPH_KEY, || {
+        ml::load_session_from_memory(embedded_graph())
+    })?;
+    let mut session = ml::lock_model(&cached)?;
     let input_name = session
         .inputs()
         .first()
