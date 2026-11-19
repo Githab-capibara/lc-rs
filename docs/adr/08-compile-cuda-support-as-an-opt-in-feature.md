@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-11-09
 - **Deciders:** @Githab-capibara
-- **Related:** [api/02-configuration.md](../api/02-configuration.md), [operations/01-installation.md](../operations/01-installation.md)
+- **Related:** [api/02-configuration.md](../api/02-configuration.md), [operations/01-installation.md](../operations/01-installation.md), [adr/17-place-inference-by-the-measured-vram-budget.md](17-place-inference-by-the-measured-vram-budget.md)
 
 ## Context
 
@@ -36,6 +36,15 @@ cuda = ["ort/cuda"]
 A CPU build has no reference to the CUDA provider at all and therefore no
 way to fail on a missing toolkit. A CUDA build registers the provider
 through `ort`'s `ExecutionProvider` list when the environment is created.
+
+> **Amended by [adr/17](17-place-inference-by-the-measured-vram-budget.md).**
+> The environment no longer carries execution providers: the placement is a
+> per-session decision measured against each checkpoint's own VRAM budget.
+> The variable's meaning is inverted as a result — unset means "use the GPU
+> if there is room", and `LCRS_CUDA=0` (or `false`, `no`, `off`) is the
+> override that forces the CPU for one run. What remains as written below is
+> the split itself: what is compiled in is the cargo feature, what is
+> switched off at run time is the environment.
 
 The runtime behaviour is controlled separately, by the environment:
 
@@ -74,7 +83,20 @@ toolkit's `libonnxruntime_providers_cuda.so` and the cuDNN libraries are on
 - **Enable CUDA by default.** Rejected: the default build would then fail
   to load on every machine without the CUDA toolkit.
 - **Detect the GPU at run time and fail gracefully.** Rejected as
-  insufficient: the failure happens inside ONNX Runtime's loader, which
-  cannot be recovered from in-process.
+  insufficient *at the time*: the failure happens inside ONNX Runtime's
+  loader, which cannot be recovered from in-process.
+  [adr/17](17-place-inference-by-the-measured-vram-budget.md) later does
+  exactly this, by registering the provider with `error_on_failure()` and
+  recovering from the error it turns into; the detection is a VRAM
+  measurement rather than a probe of the loader.
 - **Ship two binaries.** Rejected: one feature-flagged binary is simpler to
   distribute and to document.
+
+## Consequences on a machine without the runtime
+
+`--features cuda` is a decision about what the binary can do, not a promise
+that it will do it. On a machine with no CUDA runtime the provider refuses
+to register, `lc-rs doctor` says so with the reason ORT gave, and every
+session runs on the CPU — which is slower, not broken. The build is a
+superset of the default one; the placement is decided per session, not per
+build. See [adr/17](17-place-inference-by-the-measured-vram-budget.md).

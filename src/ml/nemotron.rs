@@ -5,7 +5,7 @@
 //!
 //! | Stage | Purpose |
 //! |-------|---------|
-//! | [`StreamingMel`] | raw 16 kHz chunk → 56 log-mel frames (pre-emphasis + Slaney filterbank) |
+//! | `StreamingMel` | raw 16 kHz chunk → 56 log-mel frames (pre-emphasis + Slaney filterbank) |
 //! | `encoder.onnx` | 65 mel rows (9 of them the tail of the previous chunk) → 7 encoder states per 0.56 s chunk |
 //! | `decoder.onnx` | prediction network: last token + LSTM state → decoder output |
 //! | `joint.onnx` | encoder frame + decoder output → vocabulary log-probabilities |

@@ -275,14 +275,7 @@ pub async fn run() -> Diagnostics {
         Ok(_) => diagnostics.checks.push(Check {
             label: "onnxruntime".to_string(),
             ok: true,
-            detail: format!(
-                "in-process ({})",
-                if cfg!(feature = "cuda") {
-                    "CUDA support compiled in"
-                } else {
-                    "CPU"
-                }
-            ),
+            detail: format!("in-process ({})", crate::ml::cuda_support().detail()),
             advisory: false,
         }),
         Err(err) => diagnostics.checks.push(Check {
@@ -292,6 +285,8 @@ pub async fn run() -> Diagnostics {
             advisory: false,
         }),
     }
+
+    report_gpu(&mut diagnostics);
 
     // Checkpoints.
     diagnostics.checks.push(Check {
@@ -338,6 +333,89 @@ pub async fn run() -> Diagnostics {
     }
 
     diagnostics
+}
+
+/// Report the card, the CUDA provider and the placement of every model.
+///
+/// A run that stayed on the CPU is indistinguishable from a run that never
+/// asked for the GPU, so the sweep spells out which of the two happened:
+/// the card's memory picture, whether the provider could register, and what
+/// each checkpoint's placement would be right now. The placements are the
+/// live [`crate::gpu::Decision`] values, measured against the installed
+/// checkpoints, so the report doubles as the answer to "why was my run
+/// slow?".
+fn report_gpu(diagnostics: &mut Diagnostics) {
+    diagnostics.checks.push(Check {
+        label: "\u{1}GPU placement".to_string(),
+        ok: true,
+        detail: String::new(),
+        advisory: false,
+    });
+
+    let memory = crate::gpu::probe_memory();
+    match memory {
+        Some(memory) => diagnostics.checks.push(Check {
+            label: "gpu".to_string(),
+            ok: true,
+            detail: format!(
+                "{} MiB total, {} MiB used, {} MiB free",
+                memory.total_mib, memory.used_mib, memory.free_mib
+            ),
+            advisory: false,
+        }),
+        None => diagnostics.checks.push(Check {
+            label: "gpu".to_string(),
+            ok: true,
+            detail: "no NVIDIA card found (`nvidia-smi` answered nothing usable)".to_string(),
+            advisory: false,
+        }),
+    }
+
+    let support = crate::ml::cuda_support();
+    diagnostics.checks.push(Check {
+        label: "cuda execution provider".to_string(),
+        ok: true,
+        detail: support.detail(),
+        advisory: false,
+    });
+
+    // A card that is present but cannot host the runtime is the one state
+    // worth a hint: the placement mechanism is in place and only the
+    // runtime behind it is missing.
+    if matches!(support, crate::ml::CudaSupport::Unavailable(_)) {
+        diagnostics.fix_hints.push(
+            "The binary can use a GPU, but the CUDA execution provider does not register on this \
+             machine. Check that the CUDA 13 runtime libraries (cudart, cublas, curand) are on \
+             LD_LIBRARY_PATH and that the card is supported by them.\n    \
+             A run that cannot use the GPU stays on the CPU, which is slower but not broken."
+                .to_string(),
+        );
+    }
+
+    // One measurement for the whole table: each decision re-reads the card
+    // otherwise, and a card that a run is actively loading onto would move
+    // under the report.
+    let free_mib = memory.map(|memory| memory.free_mib);
+    for row in models::list_status() {
+        if !row.installed {
+            continue;
+        }
+        // The on-disk size is what the placement will be measured against;
+        // a checkpoint that is not on disk yet (the language-ID graph is
+        // compiled into the binary) falls back to the size the registry
+        // declares, which for it is the real graph size.
+        let first = row.spec.files.first().map_or("", |file| file.name);
+        let on_disk = crate::ml::checkpoint_bytes(&row.spec.local_dir().join(first));
+        let declared: u64 = row.spec.files.iter().map(|file| file.size).sum();
+        let bytes = if on_disk == 0 { declared } else { on_disk };
+        let decision = crate::gpu::plan_for(free_mib, bytes);
+        diagnostics.checks.push(Check {
+            label: row.spec.key.to_string(),
+            ok: true,
+            detail: decision.summary(),
+            advisory: true,
+        });
+    }
 }
 
 /// Human-readable description of a cookie source.

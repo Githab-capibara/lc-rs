@@ -21,6 +21,7 @@ context that forced the choice, the choice itself, and its consequences.
 | [14-fuse-the-mel-front-end-into-the-fft-loop](14-fuse-the-mel-front-end-into-the-fft-loop.md) | Fuse the mel front-end into the FFT loop | Accepted | 2026-11-19 |
 | [15-prune-the-dependency-tree](15-prune-the-dependency-tree.md) | Prune the dependency tree and drop the oniguruma regex engine | Accepted | 2026-11-19 |
 | [16-reject-caching-the-redb-connection](16-reject-caching-the-redb-connection.md) | Reject caching the redb connection | Rejected | 2026-11-19 |
+| [17-place-inference-by-the-measured-vram-budget](17-place-inference-by-the-measured-vram-budget.md) | Place inference by the measured VRAM budget, CPU first as the fallback | Accepted | 2026-11-19 |
 
 ## The decisions in one paragraph
 
@@ -50,3 +51,12 @@ The fourth record is a rejection, kept because the proposal was reasonable
 and the reason it fails is not obvious from the code: the search index is
 *not* cached the way the models are, because a redb writer is exclusive and
 a session is not ([16](16-reject-caching-the-redb-connection.md)).
+
+The fifth moves the inference off the CPU when the workstation can host it,
+and it starts from the fact that "the GPU" is not one state on a shared
+machine: a card with room runs the whole checkpoint, a card with part of a
+checkpoint's room runs what fits and leaves the rest on the CPU, and a card
+with none runs nothing at all. The budget is measured with `nvidia-smi` —
+a child process, because the crate forbids unsafe code and takes no NVML
+binding — and the CPU is never further away than one failed session
+([17](17-place-inference-by-the-measured-vram-budget.md)).

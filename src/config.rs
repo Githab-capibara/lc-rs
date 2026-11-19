@@ -107,12 +107,33 @@ pub fn inference_threads() -> usize {
         .unwrap_or_else(default_threads)
 }
 
-/// Whether GPU execution was requested through the environment.
+/// Whether the GPU is the preferred device for ONNX Runtime.
 ///
-/// The `cuda` cargo feature decides what is *compiled in*; this variable lets
-/// a user keep a CUDA-enabled build but force CPU execution for one run.
+/// The `cuda` cargo feature decides what is *compiled in*. With it compiled
+/// in, the GPU is tried first — see [`crate::gpu::plan`] for the fallback
+/// rules — and unsetting the variable is what forces the CPU for one run.
+/// The values that turn the GPU off are the obvious ones; anything else
+/// leaves it on, so a typo cannot silently cost a placement.
 pub fn use_cuda() -> bool {
-    env_pair("CUDA").is_some_and(|v| !matches!(v.as_str(), "0" | "false" | "no" | "off"))
+    match env_pair("CUDA").as_deref() {
+        None | Some("1" | "true" | "yes" | "on") => true,
+        Some("0" | "false" | "no" | "off") => false,
+        Some(other) => {
+            tracing::debug!("LCRS_CUDA={other} is not a switch value; the GPU stays enabled");
+            true
+        }
+    }
+}
+
+/// Free VRAM, forced through the environment and expressed in MiB.
+///
+/// The placement policy trusts a measurement it can re-run, and this makes
+/// it re-runnable without a second GPU: setting `LCRS_GPU_FREE_MIB` is
+/// enough to replay a card-with-room / card-partly-busy / card-full
+/// decision. An unparseable value is ignored rather than treated as zero,
+/// so a typo cannot knock every model off the GPU.
+pub fn gpu_free_mib() -> Option<usize> {
+    env_pair("GPU_FREE_MIB").and_then(|value| value.parse::<usize>().ok())
 }
 
 /// Proxy environment variables for child processes.

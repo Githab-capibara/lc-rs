@@ -48,15 +48,29 @@ install -Dm755 target/release/lc-rs ~/.local/bin/lc-rs
 cargo build --release --features cuda
 ```
 
-A CUDA-enabled build needs the CUDA 13 toolkit and cuDNN 9 at run time:
+The feature links the CUDA execution provider into ONNX Runtime and
+symlinks the provider libraries next to the binary — ONNX Runtime finds
+them relative to the executable, and without them a CUDA build would run on
+the CPU with a library path that says nothing about the actual problem.
+
+A CUDA build needs the CUDA 13 runtime on the machine at run time:
 
 ```bash
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 ```
 
-Without those libraries the binary cannot start, because ONNX Runtime loads
-the provider at library-load time. `LCRS_CUDA=0` forces CPU execution in a
-CUDA build that has the libraries.
+The runtime is `libcudart`, `libcublas` and `libcurand` of the 13.x line.
+Without them the provider refuses to register: the binary still starts, the
+run prints one warning with the reason and stays on the CPU, and
+`lc-rs doctor` reports the same thing under "GPU placement". Nothing has to
+be configured for the GPU itself — each checkpoint is placed against the
+card's free VRAM, measured with `nvidia-smi`, and the placement falls back
+to the CPU on its own. See
+[design/01-pipeline-stages.md](../design/01-pipeline-stages.md).
+
+`LCRS_CUDA=0` forces the CPU for one run of a CUDA build, and
+`LCRS_GPU_FREE_MIB=<MiB>` replaces the measurement, which is how the
+placement policy is exercised without a second card.
 
 ## First run
 

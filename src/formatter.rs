@@ -140,7 +140,7 @@ pub fn ensure_parent(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Read a file, mapping IO failures onto [`Error::Io`].
+/// Read a file, mapping IO failures onto [`crate::errors::Error::Io`].
 pub fn read_to_string(path: &Path) -> Result<String> {
     std::fs::read_to_string(path).with_path(path)
 }

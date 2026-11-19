@@ -70,6 +70,47 @@ the index for as long as the process lived. `src/search.rs` opens the
 database per call, at the cost of one file open per file — see
 [adr/16-reject-caching-the-redb-connection.md](../adr/16-reject-caching-the-redb-connection.md).
 
+## Where the inference runs
+
+Stage 3 and stage 4 are the two that spend the time, and on a build made
+with `--features cuda` each of them is placed per checkpoint by
+`src/gpu.rs`. The card is not dedicated to this tool, so "the GPU" is not
+one state but four, and the decision is a measurement rather than a flag:
+
+| Free VRAM (measured with `nvidia-smi`) | Placement |
+|---|---|
+| at least what the checkpoint needs | the whole model on the GPU, arena unbounded |
+| between 256 MiB and what it needs | the GPU with the arena capped at the free space; whatever does not fit runs on the CPU |
+| below 256 MiB | the CPU — a placement that cannot warm up is worse than none |
+| unmeasurable | the GPU is tried, and a session that cannot be created falls back to the CPU |
+
+The budget of a checkpoint is every regular file of its directory — weights
+are often external to the graph (Qwen keeps 3 GB in `decoder_weights.data`),
+and the three Parakeet graphs of one directory are resident together —
+multiplied by 1.5 with a flat 256 MiB on top, to cover activations, the
+cuDNN algorithm-search workspace and arena rounding.
+
+Two safety nets make a wrong budget survivable: the provider is registered
+with `error_on_failure()`, so a missing CUDA runtime is an error we recover
+from rather than ORT's silent downgrade, and a session that then fails to
+*commit* on the GPU is rebuilt with no provider and committed again. The
+retry is what turns "the arena was capped one MiB too aggressively" into a
+slower run instead of a dead one.
+
+A build **without** the `cuda` feature never registers the provider at all,
+so it reports the CPU placement and does not even probe the card — the
+measurement would be a child process whose result nothing could act on.
+`LCRS_CUDA=0` forces the same for one run of a CUDA build, and
+`LCRS_GPU_FREE_MIB=<n>` replaces the measurement, which is how the four rows
+above are exercised on one machine.
+
+Everything else in the pipeline stays where it was, and for reasons that are
+not preferences: `ffmpeg` has no GPU path for discarding video and decoding
+audio, `yt-dlp` is bound by the network, and the DSP front-end would need
+its own CUDA or Vulkan kernels, which the crate cannot take (no `unsafe`, no
+new dependency). The models are what moves. The full argument is
+[adr/17-place-inference-by-the-measured-vram-budget.md](../adr/17-place-inference-by-the-measured-vram-budget.md).
+
 ## Constants
 
 | Constant | Value | Owner |
@@ -83,6 +124,9 @@ database per call, at the cost of one file open per file — see
 | Language-ID vote share | 0.5 | `ml::langid::LANGID_VOTE_THRESHOLD` |
 | Work directory | `<out>/.work/` | `pipeline::WORK_DIR_NAME` |
 | Default output directory | `./transcripts` | `TranscribeArgs::out` |
+| Card busy below | 256 MiB free | `gpu::MIN_USEFUL_FREE_MIB` |
+| Checkpoint VRAM budget | weights × 3/2 + 256 MiB | `gpu::Decision::required_mib` |
+| `nvidia-smi` probe timeout | 2 s | `gpu::PROBE_TIMEOUT` |
 
 ## Output shape
 
@@ -124,6 +168,7 @@ artefact in the single-file mode.
 | `ffmpeg` failed | `Error::AudioConversion` | the ffmpeg stderr, verbatim |
 | A checkpoint is missing | `Error::Dependency` | the list of missing artefacts and the `lc-rs model download` command |
 | The classifier or the ASR failed | `Error::Transcription` / `Error::Onnx` | the ONNX Runtime message |
+| The GPU placement cannot run | a warning | `<model> could not run on the GPU (…); retrying on the CPU`, and the run succeeds |
 | The index could not be written | a warning | `could not update search index: …`; the run still succeeds |
 | Ollama is unreachable | a warning | the run succeeds without a summary |
 

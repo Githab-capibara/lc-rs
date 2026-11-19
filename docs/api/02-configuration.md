@@ -25,7 +25,8 @@ both are set, `LCRS_` wins.
 | `LCRS_SUMMARY_ENDPOINT` / `LOCALCAPTION_SUMMARY_ENDPOINT` | `http://localhost:11434/api/generate` | the Ollama endpoint used by `--summary` |
 | `LCRS_SUMMARY_MODEL` / `LOCALCAPTION_SUMMARY_MODEL` | `llama3.1:8b` | the default Ollama model |
 | `LCRS_THREADS` / `LOCALCAPTION_THREADS` | the number of logical CPUs | the ONNX Runtime intra-op thread count |
-| `LCRS_CUDA` / `LOCALCAPTION_CUDA` | — | force CPU (`0`) or GPU (`1`) execution in a CUDA-enabled build |
+| `LCRS_CUDA` / `LOCALCAPTION_CUDA` | on | in a `--features cuda` build: the GPU is tried first and this variable is the override; `0` (or `false`, `no`, `off`) forces the CPU |
+| `LCRS_GPU_FREE_MIB` | — | free VRAM in MiB, forced instead of measured; `lc-rs` then places every checkpoint against this number |
 | `XDG_DATA_HOME` | `~/.local/share` on Linux | the platform data root |
 | `XDG_CONFIG_HOME` | `~/.config` on Linux | the platform config root |
 | `XDG_CACHE_HOME` | `~/.cache` on Linux | the platform cache root |
@@ -155,12 +156,31 @@ proxy itself stay reachable.
 
 | Cargo feature | Default | Effect |
 |---|---|---|
-| `cuda` | off | compiles the ONNX Runtime CUDA execution provider |
+| `cuda` | off | compiles the ONNX Runtime CUDA execution provider, and symlinks the provider libraries next to the built binary |
 
 ```bash
 cargo build --release --features cuda
 ```
 
-A CUDA-enabled build needs the CUDA and cuDNN shared libraries on
-`LD_LIBRARY_PATH` at run time; without them the library fails to load.
-`LCRS_CUDA=0` forces CPU execution in such a build.
+With the feature built in, the GPU is tried first and the placement falls
+back to the CPU on its own — the policy is described in
+[design/01-pipeline-stages.md](../design/01-pipeline-stages.md) and decided
+in [adr/17-place-inference-by-the-measured-vram-budget.md](../adr/17-place-inference-by-the-measured-vram-budget.md).
+A `cuda` build still needs the CUDA 13 runtime on the machine at run time
+(`libcudart`, `libcublas`, `libcurand`); without it the provider refuses to
+register, the run says so once and stays on the CPU. `LCRS_CUDA=0` forces
+the CPU in such a build even when the libraries are there.
+
+`LCRS_GPU_FREE_MIB` replaces the measurement, which makes every branch of
+the placement policy replayable on one machine:
+
+```bash
+# a card with room for the whole checkpoint
+LCRS_GPU_FREE_MIB=9000 lc-rs lecture.mp4
+# a card that is full: everything on the CPU
+LCRS_GPU_FREE_MIB=100 lc-rs lecture.mp4
+```
+
+What a run would decide right now is printed by `lc-rs model info <key>` —
+one line, measured live — and the whole table is printed under
+`lc-rs doctor`'s "GPU placement" heading.

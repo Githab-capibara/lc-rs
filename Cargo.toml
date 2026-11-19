@@ -20,10 +20,21 @@ path = "src/main.rs"
 
 [features]
 default = []
-# Opt-in GPU execution for the ONNX Runtime sessions. Requires a CUDA 13
-# toolkit and cuDNN 9 on LD_LIBRARY_PATH (e.g. runtime/*/lib inside the old
-# python venvs). CPU execution paths are always compiled.
-cuda = ["ort/cuda"]
+# Opt-in GPU execution for the ONNX Runtime sessions.
+#
+# `cuda` links the CUDA execution provider into ONNX Runtime. `copy-dylibs`
+# (an `ort` feature, not a dependency of ours) symlinks the provider
+# libraries next to the built binary: ONNX Runtime loads them by looking
+# next to the executable, and without them a CUDA-enabled build silently
+# runs on the CPU.
+#
+# The provider itself needs the CUDA 13 runtime on the machine (cudart,
+# cublas, curand) and a card in the architectures that runtime still covers:
+# the CUDA 13 line dropped Maxwell, so a Quadro M4000M could not use it even
+# with the libraries installed. A build that cannot register the provider
+# falls back to the CPU per session — see `src/gpu.rs`. CPU execution paths
+# are always compiled.
+cuda = ["ort/cuda", "ort/copy-dylibs"]
 
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }

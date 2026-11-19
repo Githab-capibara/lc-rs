@@ -88,6 +88,16 @@ cargo build --release --features cuda
 CUDA is opt-in; the default build has no CUDA dependency and cannot fail
 because of a missing toolkit.
 
+With the feature compiled in, the GPU is tried first and the placement
+falls back on its own: each checkpoint is measured against the card's free
+VRAM, so a 4 GB card shared with a local LLM server gets whatever room is
+left and the rest of the model runs on the CPU, while a full card is left
+alone. Nothing has to be configured. The build still needs the CUDA 13
+runtime on the machine; without it the run prints one warning and stays on
+the CPU. `lc-rs doctor` reports the card, the provider and the placement of
+every installed model — see
+[docs/adr/17-place-inference-by-the-measured-vram-budget.md](docs/adr/17-place-inference-by-the-measured-vram-budget.md).
+
 ## Usage
 
 ```bash
@@ -202,7 +212,8 @@ original `LOCALCAPTION_` one, so an existing setup keeps working.
 | `LCRS_MODELS_DIR` | `$XDG_DATA_HOME/lc-rs/models` | where the checkpoints live |
 | `LCRS_INDEX_PATH` | `$XDG_DATA_HOME/lc-rs/index.redb` | where the search index lives |
 | `LCRS_THREADS` | the number of logical CPUs | the ONNX Runtime thread count |
-| `LCRS_CUDA` | — | force CPU (`0`) or GPU (`1`) in a CUDA build |
+| `LCRS_CUDA` | on | in a `--features cuda` build: the GPU is tried first; `0` (or `false`, `no`, `off`) forces the CPU for one run |
+| `LCRS_GPU_FREE_MIB` | — | free VRAM in MiB, forced instead of measured; replays every placement branch on one card |
 
 The full list is in
 [docs/api/02-configuration.md](docs/api/02-configuration.md).
@@ -214,7 +225,7 @@ Everything lives in [`docs/`](docs) (master index:
 
 | Folder | Contents |
 |---|---|
-| [docs/adr](docs/adr/README.md) | Architecture Decision Records: in-process ONNX Runtime, the graph optimisation level, per-model exports, language routing, CLI parity, the search index, the proxy policy, CUDA, and the reproduced reference quirks |
+| [docs/adr](docs/adr/README.md) | Architecture Decision Records: in-process ONNX Runtime, the graph optimisation level, per-model exports, language routing, CLI parity, the search index, the proxy policy, CUDA, the reproduced reference quirks, and the VRAM placement |
 | [docs/design](docs/design/README.md) | The mechanisms: pipeline stages, model selection, the three ASR backends, output formats, batch and playlists, chapters and search, local summaries |
 | [docs/api](docs/api/README.md) | The CLI reference, the configuration and the error model |
 | [docs/models](docs/models/README.md) | The model registry and the language identification |
@@ -232,6 +243,7 @@ Everything lives in [`docs/`](docs) (master index:
 | [docs/adr/09-reproduce-the-reference-front-end-quirks.md](docs/adr/09-reproduce-the-reference-front-end-quirks.md) | Which reference behaviours are reproduced on purpose? |
 | [docs/adr/13-load-every-model-once-per-process.md](docs/adr/13-load-every-model-once-per-process.md) | Why does a batch load each checkpoint once, not once per file? |
 | [docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md) | How did the front-end get 4.7× faster without changing a bit? |
+| [docs/adr/17-place-inference-by-the-measured-vram-budget.md](docs/adr/17-place-inference-by-the-measured-vram-budget.md) | When does a model run on the video card, and when does it stay on the CPU? |
 
 ## Development
 

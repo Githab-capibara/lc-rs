@@ -9,7 +9,7 @@
 
 ## The checks
 
-`lc-rs doctor` runs six groups of checks and prints one row per check.
+`lc-rs doctor` runs seven groups of checks and prints one row per check.
 
 ### The binary
 
@@ -74,7 +74,32 @@ Model runtimes:
   ✅ onnxruntime  (in-process (CPU))
 ```
 
-A CUDA-enabled build reports `(CUDA)` here.
+The parenthesis is the state of the CUDA execution provider on this
+machine, which is the question the row actually answers: `available`
+(a card this build can use), `not compiled in (rebuild with --features
+cuda)` (the default build), or `unavailable: <reason>` (built for the GPU,
+but the runtime libraries or the card are missing).
+
+### The GPU placement
+
+Where the inference of each checkpoint would run, measured now:
+
+```text
+GPU placement:
+  ✅ gpu  (4096 MiB total, 3937 MiB used, 96 MiB free)
+  ✅ cuda execution provider  (unavailable: Failed to load library … libcublasLt.so.13: cannot open shared object file)
+  ✅ langid-ecapa  (CPU (96 MiB free, 377 MiB needed; the card is too busy to host the model))
+  ✅ qwen3-asr-0.6b  (GPU with a 1319 MiB arena (1319 MiB free, 6086 MiB needed); what does not fit runs on the CPU)
+  ✅ parakeet-tdt-0.6b-int8  (GPU (unbounded arena: 1319 MiB free, 1216 MiB needed))
+```
+
+One `nvidia-smi` reading feeds the whole table, and each row is the
+decision `gpu::plan` would make for that checkpoint against it. A row is
+what answers "why was my run on the CPU": the card's room, the budget the
+checkpoint asked for, and which of the two did not fit. A build without the
+`cuda` feature reports the CPU placement for every model instead, and says
+so. The policy itself is in
+[design/01-pipeline-stages.md](../design/01-pipeline-stages.md).
 
 ### The models
 
@@ -111,6 +136,11 @@ in the "How to fix" section:
 * **the browser cookies** — a Netscape cookie jar has to be exported by the
   user, or a browser with a logged-in session has to be named;
 * **the Tor control port** — it has to be enabled in `torrc`.
+
+A `--features cuda` build on a machine without the CUDA 13 runtime adds a
+third piece of advice: the provider cannot register, so every run stays on
+the CPU. The libraries are the user's to install; the run is not broken,
+only slower.
 
 After the repairs, the diagnostics are **re-run**, so the output shows the
 state after the fix, not before.

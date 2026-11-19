@@ -19,6 +19,7 @@
 //! | [`summary`] | optional local-Ollama summary |
 //! | [`pipeline`] | end-to-end orchestration |
 //! | [`ml`] | ONNX Runtime inference (LangID + the three ASR models) |
+//! | [`gpu`] | VRAM budget and the GPU/CPU placement decision |
 
 #![deny(warnings)]
 #![forbid(unsafe_code)]
@@ -58,6 +59,7 @@ pub mod doctor;
 pub mod downloader;
 pub mod errors;
 pub mod formatter;
+pub mod gpu;
 pub mod languages;
 pub mod ml;
 pub mod models;

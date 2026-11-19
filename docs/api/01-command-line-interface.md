@@ -131,7 +131,7 @@ sweep fail.
 | `list` | every supported model, its role, its size and its install status |
 | `download <KEY>` | download one model; `--all` downloads every model, `--force` re-downloads, `-y` skips the confirmation |
 | `rm <KEY>` | remove an installed model; the aliases `remove` and `delete` work too, `-y` skips the confirmation |
-| `info <KEY>` | the details of one model: role, description, size, source, local path, missing artefacts |
+| `info <KEY>` | the details of one model: role, description, size, execution, source, local path, missing artefacts |
 
 ```console
 $ lc-rs model list
@@ -150,6 +150,20 @@ Models used by lc-rs:
 `qwen3-asr-0.6b-int4` and `parakeet-tdt-0.6b-v3-int8` are optional variants
 of the Russian and the English model: the `--all` download does not fetch
 them, and `doctor` reports them as optional rather than as missing models.
+
+The `info` line for the execution is the placement the model would get
+right now, measured against the card's free VRAM:
+
+```console
+$ lc-rs model info parakeet-tdt-0.6b-v3-int8
+Approx size:  670 MB
+Execution:    ONNX Runtime (GPU, arena capped at 1116 MiB, the rest on the CPU)
+```
+
+`ONNX Runtime (CPU)` means either that the build has no CUDA provider, that
+`LCRS_CUDA=0` was set, or that the card has no room for the checkpoint.
+[design/01-pipeline-stages.md](../design/01-pipeline-stages.md) has the
+rules; `lc-rs doctor` prints the numbers behind the decision.
 
 ## `lc-rs search`
 

@@ -699,14 +699,15 @@ fn model_info(key: &str) -> i32 {
         "Approx size:  {}",
         doctor::format_size_mb(spec.approx_size_mb)
     );
-    println!(
-        "Execution:    {}",
-        if cfg!(feature = "cuda") {
-            "ONNX Runtime (CUDA support compiled in)"
-        } else {
-            "ONNX Runtime (CPU)"
-        }
+    // The placement a run would make for this checkpoint, measured now.
+    let on_disk = crate::ml::checkpoint_bytes(
+        &spec
+            .local_dir()
+            .join(spec.files.first().map_or("", |file| file.name)),
     );
+    let declared: u64 = spec.files.iter().map(|file| file.size).sum();
+    let decision = crate::gpu::plan(if on_disk == 0 { declared } else { on_disk });
+    println!("Execution:    {}", decision.execution_summary());
     if spec.is_embedded() {
         // The graph is compiled into the binary, so there is nothing to
         // download and the on-disk copy is optional.
