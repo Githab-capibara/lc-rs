@@ -1,21 +1,16 @@
 <div align="center">
 
-# lc-rs
+<img src="docs/assets/banner.svg" alt="lc-rs — fully-local transcription for YouTube and local files" width="100%">
 
-**Fully-local transcription for YouTube and local files.**
-Language-ID routing, three specialist ASR models, SRT/VTT/JSON out.
-No API key. No Python. One binary.
-
-<!-- Package -->
 <p>
-  <a href="https://crates.io/crates/lc-rs"><img src="https://img.shields.io/crates/v/lc-rs?logo=rust&logoColor=white&color=%23dea584&cacheSeconds=300" alt="crates.io version"></a>
   <a href="https://github.com/Githab-capibara/lc-rs/actions/workflows/ci.yml"><img src="https://github.com/Githab-capibara/lc-rs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Githab-capibara/lc-rs?color=yellow" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" alt="License: MIT"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust%20edition-2024-blue?logo=rust&logoColor=white" alt="Rust edition 2024"></a>
+  <img src="https://img.shields.io/badge/MSRV-1.98-blue?logo=rust&logoColor=white" alt="MSRV 1.98">
+  <img src="https://img.shields.io/badge/unsafe%20code-forbid-8250df?logo=rust&logoColor=white" alt="unsafe code: forbid">
+  <img src="https://img.shields.io/badge/Rust-12.6k%20lines-dea584?logo=rust&logoColor=white" alt="12.6k lines of Rust">
 </p>
-
-<!-- Community -->
 <p>
-  <a href="https://github.com/Githab-capibara/lc-rs"><img src="https://img.shields.io/badge/website-Githab--capibara/lc--rs-8A5CF5?logo=github" alt="Website"></a>
   <a href="https://github.com/Githab-capibara/lc-rs/stargazers"><img src="https://img.shields.io/github/stars/Githab-capibara/lc-rs?style=flat&logo=github" alt="GitHub stars"></a>
   <a href="https://github.com/Githab-capibara/lc-rs/issues"><img src="https://img.shields.io/github/issues/Githab-capibara/lc-rs" alt="Open issues"></a>
   <a href="https://github.com/Githab-capibara/lc-rs/commits/main"><img src="https://img.shields.io/github/last-commit/Githab-capibara/lc-rs?logo=github" alt="Last commit"></a>
@@ -38,7 +33,7 @@ cargo install --path . && lc-rs doctor --fix
 > [Parakeet TDT](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) and
 > [Nemotron 3.5 ASR](https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b).
 
-`lc-rs` is a tiny orchestrator over four stages:
+`lc-rs` is a tiny orchestrator over five stages:
 
 | Stage | Tool |
 |---|---|
@@ -46,6 +41,7 @@ cargo install --path . && lc-rs doctor --fix
 | Re-encode to 16 kHz mono WAV | [`ffmpeg`](https://ffmpeg.org/) |
 | Detect the language | ECAPA-TDNN classifier (45 languages), embedded in the binary |
 | Transcribe locally | Qwen3-ASR 0.6B · Parakeet TDT 0.6B v3 · Nemotron 3.5 ASR 0.6B |
+| Write and index the artefacts | `md`/`txt`/`srt`/`vtt`/`json` + the `redb` search index |
 
 Nothing is uploaded to a third-party service. No OpenAI / Google / DeepL
 keys required. Unlike pasting a clip into ChatGPT or calling the Whisper
@@ -74,7 +70,7 @@ lc-rs doctor --fix          # install ffmpeg / yt-dlp, fetch the checkpoints
 ```
 
 Requirements: Rust 1.98+, `ffmpeg`, `yt-dlp`, a C compiler with `cmake` (the
-TLS provider and ONNX Runtime's build-time downloader compile C), and ~8.3 GB
+TLS provider and ONNX Runtime's build-time downloader compile C), and ~7.7 GB
 of disk for the four required checkpoints. The optional quantised variants of
 the Russian and the English model add 2.0 GB and 670 MB. See
 [docs/operations/01-installation.md](docs/operations/01-installation.md).
@@ -112,6 +108,22 @@ lc-rs --batch urls.txt -o ./out
 
 # Search what you have transcribed so far.
 lc-rs search "climate policy"
+```
+
+The console shows the run and keeps stdout for the artefacts:
+
+```console
+$ lc-rs intro.wav -l en --model parakeet-tdt-0.6b-v3 --output-format all
+ INFO ffmpeg: re-encoding to 16000 Hz mono WAV
+ INFO done (English, parakeet-tdt-0.6b-v3)
+transcript files:
+   txt: out/intro.txt      srt: out/intro.srt
+   vtt: out/intro.vtt      json: out/intro.json
+    md: out/intro.md
+
+─────────────────────────────── transcript ─
+The birch canoe slid on the smooth planks. Glue the sheet to the dark blue
+background. It is easy to tell the depth of a well. ...
 ```
 
 The transcript lands in `./transcripts/<stem>.md`:
@@ -152,7 +164,7 @@ Every flag is documented in
 does not fetch them and their absence never fails a check. Pick them with
 `lc-rs --model qwen3-asr-0.6b-int4` or
 `lc-rs --model parakeet-tdt-0.6b-v3-int8` on a machine that cannot afford
-the 7.2 GiB the fp32 Qwen decoder and the 2.6 GiB the fp32 Parakeet encoder
+the 7.2 GiB the fp32 Qwen decoder and the 2.7 GiB the fp32 Parakeet encoder
 need. The measurements behind the choices are in
 [ADR 10](docs/adr/10-ship-the-fp32-qwen-decoder.md) and
 [ADR 12](docs/adr/12-ship-the-fp32-parakeet-export.md).
@@ -167,39 +179,83 @@ resumable.
 
 ## Architecture
 
-```text
-             ┌──────────────┐
-  URL ──────▶│    yt-dlp    │────▶ media file
-             └──────────────┘
-                    │
-             ┌──────────────┐
-             │    ffmpeg    │────▶ 16 kHz mono WAV
-             └──────────────┘
-                    │
-             ┌──────────────┐
-             │  langid      │────▶ language code
-             │ (ECAPA-TDNN) │      ru ─▶ Qwen3-ASR
-             └──────────────┘      en ─▶ Parakeet TDT
-                    │             else ─▶ Nemotron 3.5
-             ┌──────────────┐
-             │  ONNX Runtime│────▶ segments + text
-             └──────────────┘
-                    │
-             ┌──────────────┐
-             │  formatter   │────▶ .md .txt .srt .vtt .json
-             └──────────────┘
-                    │
-             ┌──────────────┐
-             │  redb index  │────▶ lc-rs search TERM
-             └──────────────┘
-```
+<img src="docs/assets/pipeline.svg" alt="The lc-rs pipeline: download, normalise, detect the language, transcribe, write the artefacts" width="100%">
 
 Every model runs **in-process** through ONNX Runtime: no virtualenv, no
-`torch`, no child process, no JSON payload crossing a process boundary. See
-[adr/01-run-models-in-process-through-onnx-runtime.md](docs/adr/01-run-models-in-process-through-onnx-runtime.md).
+`torch`, no child process, no JSON payload crossing a process boundary. The
+front-end is fused into the FFT loop, so a 30-second window is mel-spectrogrammed
+without a second pass over the samples.
 
 The pipeline stage by stage:
-[docs/design/01-pipeline-stages.md](docs/design/01-pipeline-stages.md).
+[docs/design/01-pipeline-stages.md](docs/design/01-pipeline-stages.md) ·
+the decisions behind it:
+[docs/adr/01-run-models-in-process-through-onnx-runtime.md](docs/adr/01-run-models-in-process-through-onnx-runtime.md),
+[docs/adr/13-load-every-model-once-per-process.md](docs/adr/13-load-every-model-once-per-process.md),
+[docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md).
+
+## Where the inference runs
+
+<img src="docs/assets/placement.svg" alt="The VRAM placement policy: a card with room, a card with part of a room, a busy card, and an unmeasurable card" width="100%">
+
+A workstation's card is not a dedicated resource, so the placement is a
+measurement rather than a flag. `src/gpu.rs` probes `nvidia-smi` — a child
+process, because the crate forbids `unsafe` and takes no NVML binding —
+and asks each checkpoint for what it needs: its whole directory
+`× 3/2 + 256 MiB`.
+
+- a session that **fits** gets the CUDA provider with an unbounded arena;
+- a session that **partly fits** gets the arena capped at the free space, so
+  the runtime uses the room that exists and the rest stays on the CPU;
+- a card with **less than 256 MiB** free is left alone — that is under one
+  cuDNN workspace, and a placement that cannot warm up is worse than none;
+- an **unmeasurable** card is still tried, and a session that then cannot be
+  committed is rebuilt on the CPU.
+
+Two safety nets make a wrong budget survivable: the provider is registered
+with `error_on_failure()`, so a missing CUDA runtime is an error we recover
+from rather than ORT's silent downgrade, and a session that fails to *commit*
+on the GPU is rebuilt with no provider and committed again.
+
+`LCRS_CUDA=0` forces the CPU for one run; `LCRS_GPU_FREE_MIB=<MiB>` replaces
+the measurement, which is how all four branches are replayed on one card:
+
+```bash
+# a card with room for the whole checkpoint
+LCRS_GPU_FREE_MIB=9000 lc-rs lecture.mp4
+# a card that is full: everything on the CPU
+LCRS_GPU_FREE_MIB=100 lc-rs lecture.mp4
+```
+
+What a run would decide right now is one line of `lc-rs model info <key>`,
+and the whole table is under `lc-rs doctor`'s *GPU placement* heading —
+the card, the provider's verdict, and every installed checkpoint.
+
+## Performance
+
+<img src="docs/assets/benchmark.svg" alt="Inference time per model for 33.6 seconds of audio, CPU-only, with the load shown separately" width="100%">
+
+Measured on this repository's own machine — an i7-6820HQ, 4 cores / 8
+threads, warmed page cache, one 45-second window, CPU-only:
+
+| Model | Role | Load, once per process | Transcribe 33.6 s | Real time |
+|---|---|---|---|---|
+| `parakeet-tdt-0.6b-v3-int8` | English, quantised | 5 s | 7 s | 4.8&#215; |
+| `parakeet-tdt-0.6b-v3` | English, fp32 | 5 s | 8 s | 4.2&#215; |
+| `qwen3-asr-0.6b-int4` | Russian, quantised | 5 s | 17.5 s | 1.9&#215; |
+| `qwen3-asr-0.6b` | Russian, fp32 | 8 s | 27.5 s | 1.2&#215; |
+| `nemotron-3.5-asr-streaming-0.6b` | multilingual | 2.5 s | 22 s | 1.5&#215; |
+
+"n&#215; real time" is audio seconds per wall-clock second; the numbers are
+medians of batch runs, where the second item of the batch pays no load —
+which is exactly what a batch of forty videos does. The front-end costs
+under 0.15 s of it: `ffmpeg` re-encodes in 71 ms on this fixture and the
+fused mel loop adds 13–17 ms per 30-second window.
+
+Accuracy lives in the decision records rather than in a benchmark table: the
+English path is byte-identical to the reference implementation, and the
+Russian and multilingual word error rates against its transcripts are
+[ADR 10](docs/adr/10-ship-the-fp32-qwen-decoder.md) and
+[ADR 12](docs/adr/12-ship-the-fp32-parakeet-export.md).
 
 ## Configuration
 
@@ -230,6 +286,7 @@ Everything lives in [`docs/`](docs) (master index:
 | [docs/api](docs/api/README.md) | The CLI reference, the configuration and the error model |
 | [docs/models](docs/models/README.md) | The model registry and the language identification |
 | [docs/operations](docs/operations/README.md) | Installation and `doctor --fix` |
+| [docs/assets](docs/assets/README.md) | The diagrams this README and the documentation embed |
 
 ### Key entry points
 
@@ -242,7 +299,7 @@ Everything lives in [`docs/`](docs) (master index:
 | [docs/design/03-qwen3-asr-backend.md](docs/design/03-qwen3-asr-backend.md) | How does the Russian model actually work? |
 | [docs/adr/09-reproduce-the-reference-front-end-quirks.md](docs/adr/09-reproduce-the-reference-front-end-quirks.md) | Which reference behaviours are reproduced on purpose? |
 | [docs/adr/13-load-every-model-once-per-process.md](docs/adr/13-load-every-model-once-per-process.md) | Why does a batch load each checkpoint once, not once per file? |
-| [docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md) | How did the front-end get 4.7× faster without changing a bit? |
+| [docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md](docs/adr/14-fuse-the-mel-front-end-into-the-fft-loop.md) | How did the front-end get 4.7&#215; faster without changing a bit? |
 | [docs/adr/17-place-inference-by-the-measured-vram-budget.md](docs/adr/17-place-inference-by-the-measured-vram-budget.md) | When does a model run on the video card, and when does it stay on the CPU? |
 
 ## Development
@@ -254,7 +311,7 @@ cargo clippy --all-targets --all-features
 cargo fmt --all
 ```
 
-The crate denies warnings and forbids unsafe code:
+The crate denies warnings, forbids unsafe code and lints pedantic:
 
 ```toml
 [lints.rust]
@@ -265,6 +322,15 @@ missing_debug_implementations = "deny"
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 ```
+
+Formatting, clippy, tests, the release build and a job that greps `src/` for
+`unsafe` behind the compiler's back all run in
+[CI](.github/workflows/ci.yml), on both the current toolchain and the pinned
+MSRV 1.98.
+The pedantic lints that the audio and model code opts out of are listed in
+one place, with the reasoning, at the top of
+[`src/lib.rs`](src/lib.rs) — the crate also builds `cargo doc` without a
+warning.
 
 The unit tests run without any model. The end-to-end tests need the
 checkpoints and are marked `#[ignore]`:

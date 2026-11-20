@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="560" viewBox="0 0 1240 560" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+    </marker>
+    <marker id="a-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1a7f37"/>
+    </marker>
+    <marker id="a-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9a6700"/>
+    </marker>
+    <marker id="a-gray2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+    </marker>
+    <marker id="a-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8250df"/>
+    </marker>
+  </defs>
+  <style>
+    .ttl { fill: #57606a; font-size: 12px; font-weight: 600; letter-spacing: 2px; }
+    .tt  { fill: #1f2328; font-size: 15px; font-weight: 600; }
+    .tt2 { fill: #1f2328; font-size: 17px; font-weight: 600; }
+    .m   { fill: #57606a; font-size: 13px; }
+    .mono{ fill: #57606a; font-size: 12px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+    .cond{ fill: #f6f8fa; stroke: #d0d7de; }
+    .full{ fill: #fff8f0; stroke: #dea584; }
+    .part{ fill: #fffaf0; stroke: #bf8700; }
+    .busy{ fill: #f6f8fa; stroke: #57606a; }
+    .unk { fill: #fbf7ff; stroke: #8250df; stroke-opacity: .5; }
+    .chip{ fill: #ffffff; stroke: #d0d7de; }
+  </style>
+
+  <rect x="0" y="0" width="1240" height="560" rx="14" fill="#ffffff" stroke="#d0d7de"/>
+  <text x="28" y="34" class="ttl">WHERE ONE CHECKPOINT RUNS</text>
+  <text x="28" y="58" class="m">&#8220;The GPU&#8221; is four states on a shared machine, so the placement is a measurement, not a flag.</text>
+
+  <!-- the probe -->
+  <rect x="28" y="86" width="330" height="58" rx="10" class="chip"/>
+  <text x="193" y="110" text-anchor="middle" class="tt2">nvidia-smi</text>
+  <text x="193" y="130" text-anchor="middle" class="mono">child process, 2 s ceiling</text>
+
+  <path d="M 358 115 L 402 115" stroke="#57606a" stroke-width="1.5" marker-end="url(#a-gray)"/>
+
+  <!-- the budget -->
+  <rect x="406" y="86" width="380" height="58" rx="10" class="chip"/>
+  <text x="596" y="110" text-anchor="middle" class="tt2">budget of the checkpoint</text>
+  <text x="596" y="130" text-anchor="middle" class="mono">directory &#215; 3/2 + 256 MiB</text>
+
+  <path d="M 596 144 L 596 176" stroke="#57606a" stroke-width="1.5" marker-end="url(#a-gray)"/>
+
+  <rect x="470" y="180" width="260" height="34" rx="17" class="cond"/>
+  <text x="600" y="202" text-anchor="middle" class="mono">free VRAM &#8804;? budget &#8212; compared per session</text>
+
+  <!-- four outcomes -->
+  <path d="M 470 197 L 424 197 L 424 250" stroke="#1a7f37" stroke-width="1.5" fill="none" marker-end="url(#a-green)"/>
+  <path d="M 596 214 L 596 250" stroke="#bf8700" stroke-width="1.5" marker-end="url(#a-amber)"/>
+  <path d="M 730 197 L 776 197 L 776 250" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#a-gray2)"/>
+  <path d="M 840 197 L 900 197 L 900 250" stroke="#8250df" stroke-width="1.5" fill="none" marker-end="url(#a-purple)"/>
+
+  <rect x="28" y="254" width="280" height="132" rx="10" class="full"/>
+  <text x="168" y="282" text-anchor="middle" class="tt">room for the whole model</text>
+  <text x="168" y="306" text-anchor="middle" class="m">&#8595; every graph on the card</text>
+  <text x="168" y="332" text-anchor="middle" class="mono">CUDA provider, arena unbounded</text>
+  <text x="168" y="356" text-anchor="middle" class="mono">e.g. 1319 MiB free, 1216 needed</text>
+
+  <rect x="330" y="254" width="280" height="132" rx="10" class="part"/>
+  <text x="470" y="282" text-anchor="middle" class="tt">part of the room is enough</text>
+  <text x="470" y="306" text-anchor="middle" class="m">&#8595; what fits on the card, rest on CPU</text>
+  <text x="470" y="332" text-anchor="middle" class="mono">gpu_mem_limit = the free space,</text>
+  <text x="470" y="350" text-anchor="middle" class="mono">arena growth: same as requested</text>
+
+  <rect x="632" y="254" width="280" height="132" rx="10" class="busy"/>
+  <text x="772" y="282" text-anchor="middle" class="tt">the card is busy</text>
+  <text x="772" y="306" text-anchor="middle" class="m">&#8595; everything on the CPU</text>
+  <text x="772" y="332" text-anchor="middle" class="mono">below 256 MiB free: less than one</text>
+  <text x="772" y="350" text-anchor="middle" class="mono">cuDNN workspace, so it cannot warm up</text>
+
+  <rect x="934" y="254" width="278" height="132" rx="10" class="unk"/>
+  <text x="1073" y="282" text-anchor="middle" class="tt">not measurable</text>
+  <text x="1073" y="306" text-anchor="middle" class="m">&#8595; the GPU is tried anyway</text>
+  <text x="1073" y="332" text-anchor="middle" class="mono">provider registered with</text>
+  <text x="1073" y="350" text-anchor="middle" class="mono">error_on_failure; a session that</text>
+  <text x="1073" y="368" text-anchor="middle" class="mono">cannot commit is rebuilt on the CPU</text>
+
+  <text x="28" y="418" class="mono">e.g. this machine: 4096 MiB card, 1116 MiB free &#8212; the int8 Parakeet (1216 MiB needed) lands on the capped arena.</text>
+
+  <!-- overrides -->
+  <rect x="28" y="440" width="1184" height="90" rx="10" class="chip"/>
+  <text x="52" y="470" class="tt">Overrides, and the build gate</text>
+  <g class="mono">
+    <text x="52" y="496">LCRS_CUDA=0</text>
+    <text x="200" y="496">&#8594; the CPU for one run of a CUDA build</text>
+    <text x="640" y="496">LCRS_GPU_FREE_MIB=9000</text>
+    <text x="860" y="496">&#8594; the budget, forced: every branch replays on one card</text>
+    <text x="52" y="518">no --features cuda</text>
+    <text x="200" y="518">&#8594; the CPU, and the card is never probed: a placement it could not execute is not a placement it may report</text>
+  </g>
+</svg>

@@ -26,6 +26,7 @@ anywhere.
 | [`api/`](api/) | CLI reference, configuration, error model | [api/README.md](api/README.md) |
 | [`models/`](models/) | Model registry and language identification | [models/README.md](models/README.md) |
 | [`operations/`](operations/) | Installation and `doctor --fix` | [operations/README.md](operations/README.md) |
+| [`assets/`](assets/) | The diagrams the README and this documentation embed | [assets/README.md](assets/README.md) |
 
 ## Key entry points
 

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="wash" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f6f8fa"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8250df"/>
+      <stop offset="0.55" stop-color="#8250df" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#dea584"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="360" rx="16" fill="url(#wash)" stroke="#d0d7de"/>
+  <rect x="0" y="0" width="1280" height="4" rx="2" fill="url(#rule)"/>
+
+  <text x="640" y="92" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="3" fill="#8250df">FULLY LOCAL · NO API KEY · ONE BINARY</text>
+
+  <text x="640" y="188" text-anchor="middle" font-size="82" font-weight="700" letter-spacing="-2" fill="#1f2328">lc-rs</text>
+
+  <text x="640" y="238" text-anchor="middle" font-size="25" fill="#1f2328">YouTube and local files in, transcripts out.</text>
+  <text x="640" y="274" text-anchor="middle" font-size="25" fill="#57606a">Rust, in-process ONNX Runtime, nothing uploaded.</text>
+
+  <g font-size="16" fill="#1f2328">
+    <rect x="112" y="300" width="176" height="38" rx="19" fill="#ffffff" stroke="#d0d7de"/>
+    <text x="200" y="324" text-anchor="middle">yt-dlp</text>
+
+    <text x="310" y="324" text-anchor="middle" font-size="18" fill="#57606a">&#8594;</text>
+
+    <rect x="332" y="300" width="176" height="38" rx="19" fill="#ffffff" stroke="#d0d7de"/>
+    <text x="420" y="324" text-anchor="middle">ffmpeg · 16 kHz</text>
+
+    <text x="530" y="324" text-anchor="middle" font-size="18" fill="#57606a">&#8594;</text>
+
+    <rect x="552" y="300" width="176" height="38" rx="19" fill="#ffffff" stroke="#d0d7de"/>
+    <text x="640" y="324" text-anchor="middle">ECAPA-TDNN lang-ID</text>
+
+    <text x="750" y="324" text-anchor="middle" font-size="18" fill="#57606a">&#8594;</text>
+
+    <rect x="772" y="300" width="176" height="38" rx="19" fill="#ffffff" stroke="#d0d7de"/>
+    <text x="860" y="324" text-anchor="middle">3 ASR models</text>
+
+    <text x="970" y="324" text-anchor="middle" font-size="18" fill="#57606a">&#8594;</text>
+
+    <rect x="992" y="300" width="176" height="38" rx="19" fill="#ffffff" stroke="#d0d7de"/>
+    <text x="1080" y="324" text-anchor="middle">md txt srt vtt</text>
+  </g>
+</svg>

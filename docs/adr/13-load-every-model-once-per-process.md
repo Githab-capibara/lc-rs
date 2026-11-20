@@ -14,8 +14,8 @@ paid the same load N times:
 
 | Load | Measured (release, this machine) | Weights held |
 |---|---|---|
-| Parakeet fp32 | 3.3 – 5.0 s | 2.4 GB on disk, ~2.6 GiB resident |
-| Qwen fp32 | 5.1 – 9.2 s | 3.8 GB on disk |
+| Parakeet fp32 | 3.3 – 5.0 s | 2.4 GB on disk, ~2.7 GiB resident |
+| Qwen fp32 | 5.1 – 9.2 s | 3.8 GB on disk, ~7.2 GiB resident |
 | Nemotron int8 | not measured, the same order | ~1.0 GB on disk |
 | language-ID graph | ~0.23 s | 139 KB, compiled into the binary |
 

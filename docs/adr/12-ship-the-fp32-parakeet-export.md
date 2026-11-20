@@ -87,10 +87,10 @@ The loader accepts both layouts: a directory holding `encoder-model.onnx` and
   and in memory — the fp32 weights are offset by the absence of Python.
 - **Harder:** the default download grows from 670 MB to 2.5 GB. Over Tor,
   with the rate limits of the CDN, that is an order of magnitude longer.
-- **Harder:** the resident memory of the English path grows from 1.5 GiB to
-  2.6 GiB. A machine that cannot afford that has the int8 export.
+- **Harder:** the resident memory of the English path grows from 1.6 GiB to
+  2.7 GiB. A machine that cannot afford that has the int8 export.
 - **Given up:** the smallest possible footprint. The int8 export is the only
-  way to run the English model in 1.5 GiB, and it is kept for that.
+  way to run the English model in 1.6 GiB, and it is kept for that.
 - **Migration:** an installation that already holds the int8 files under
   `parakeet-tdt-0.6b-v3` must download the fp32 files into the same
   directory and move the int8 files to `parakeet-tdt-0.6b-v3-int8`.
@@ -103,7 +103,7 @@ The loader accepts both layouts: a directory holding `encoder-model.onnx` and
   reference transcript and drops a whole sentence. The saving is real, but
   it is not worth changing what the tool says.
 - **Ship the fp32 export only, and drop the int8 one.** Rejected: a machine
-  that cannot afford 2.6 GiB would then have no English model at all, while
+  that cannot afford 2.7 GiB would then have no English model at all, while
   the artefact exists and works.
 - **Convert the PyTorch checkpoint to ONNX ourselves, in fp32.** Rejected:
   upstream already publishes the fp32 export, pinned by digest, with the

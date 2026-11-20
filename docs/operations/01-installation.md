@@ -16,7 +16,7 @@
 | `yt-dlp` | downloads the media from a URL |
 | a SOCKS5 proxy (usually Tor) | every outbound request goes through it |
 | a C compiler and `cmake` | the TLS provider `reqwest` selects (`aws-lc-rs`) and ONNX Runtime's build-time downloader (`ring`, through `ort`) compile C while the crate builds |
-| ~8.3 GB of disk | the four required checkpoints |
+| ~7.7 GB of disk | the four required checkpoints |
 
 `ffmpeg` and `yt-dlp` are found on `PATH`; `lc-rs doctor --fix` can install
 them through the host's package manager.
@@ -115,8 +115,8 @@ lc-rs talk.mp3 --model qwen3-asr-0.6b-int4
 ```
 
 The optional `parakeet-tdt-0.6b-v3-int8` is the English model with quantised
-encoder and joint graphs: an eighth of the encoder weights and 1.5 GiB
-instead of 2.6 GiB of memory, at the cost of the fidelity — the word error
+encoder and joint graphs: an eighth of the encoder weights and 1.6 GiB
+instead of 2.7 GiB of memory, at the cost of the fidelity — the word error
 rate against the reference transcript rises from 0 to 0.469:
 
 ```bash

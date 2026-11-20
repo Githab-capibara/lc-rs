@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="620" viewBox="0 0 1240 620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#57606a"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8250df"/>
+    </marker>
+    <marker id="arrowPeach" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#bf8700"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1a7f37"/>
+    </marker>
+  </defs>
+
+  <style>
+    .t   { fill: #1f2328; font-size: 15px; }
+    .tt  { fill: #1f2328; font-size: 17px; font-weight: 600; }
+    .m   { fill: #57606a; font-size: 13px; }
+    .mono{ fill: #57606a; font-size: 12px; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+    .box { fill: #ffffff; stroke: #d0d7de; }
+    .in  { fill: #f6f8fa; stroke: #d0d7de; }
+    .pipe{ fill: #fbf7ff; stroke: #8250df; stroke-opacity: .45; }
+    .cpu { fill: #fff8f0; stroke: #dea584; }
+    .ttl { fill: #57606a; font-size: 12px; font-weight: 600; letter-spacing: 2px; }
+  </style>
+
+  <text x="20" y="0" class="ttl">ONE RUN, END TO END</text>
+
+  <!-- input -->
+  <rect x="20" y="34" width="230" height="58" rx="10" class="in"/>
+  <text x="135" y="58" text-anchor="middle" class="tt">YouTube URL</text>
+  <text x="135" y="78" text-anchor="middle" class="m">or a local file path</text>
+
+  <path d="M 250 63 L 296 63" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- stage 1 -->
+  <rect x="300" y="34" width="230" height="58" rx="10" class="box"/>
+  <text x="415" y="58" text-anchor="middle" class="tt">1 · download</text>
+  <text x="415" y="78" text-anchor="middle" class="mono">src/downloader.rs</text>
+
+  <path d="M 530 63 L 576 63" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- stage 2 -->
+  <rect x="580" y="34" width="230" height="58" rx="10" class="box"/>
+  <text x="695" y="58" text-anchor="middle" class="tt">2 · normalise</text>
+  <text x="695" y="78" text-anchor="middle" class="mono">ffmpeg &#8594; 16 kHz mono wav</text>
+
+  <path d="M 810 63 L 856 63" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- stage 3 -->
+  <rect x="860" y="34" width="230" height="58" rx="10" class="box"/>
+  <text x="975" y="58" text-anchor="middle" class="tt">3 · detect language</text>
+  <text x="975" y="78" text-anchor="middle" class="mono">ECAPA-TDNN, embedded</text>
+
+  <path d="M 1090 63 L 1136 63" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="1140" y="34" width="80" height="58" rx="10" class="in"/>
+  <text x="1180" y="58" text-anchor="middle" class="tt">ru</text>
+  <text x="1180" y="76" text-anchor="middle" class="tt">en</text>
+  <text x="1180" y="94" text-anchor="middle" class="tt">else</text>
+
+  <path d="M 975 92 C 975 132 975 132 975 152" stroke="#8250df" stroke-width="1.5" marker-end="url(#arrowPurple)"/>
+
+  <!-- stage 4 wrapper -->
+  <rect x="20" y="152" width="1200" height="252" rx="12" class="pipe"/>
+  <text x="40" y="180" class="ttl">4 &#183; TRANSCRIBE, IN-PROCESS</text>
+
+  <!-- router -->
+  <rect x="860" y="196" width="230" height="58" rx="10" class="box"/>
+  <text x="975" y="220" text-anchor="middle" class="tt">router</text>
+  <text x="975" y="240" text-anchor="middle" class="mono">resolve_model()</text>
+
+  <!-- three models -->
+  <rect x="120" y="280" width="300" height="104" rx="10" class="cpu"/>
+  <text x="270" y="306" text-anchor="middle" class="tt">Qwen3-ASR 0.6B</text>
+  <text x="270" y="326" text-anchor="middle" class="m">Russian &#183; fp32 4.0 GB / int4 2.0 GB</text>
+  <text x="270" y="346" text-anchor="middle" class="mono">encoder &#8594; decoder_init &#8594; decoder_step</text>
+  <text x="270" y="372" text-anchor="middle" class="m">45 s windows, autoregressive decode</text>
+
+  <rect x="470" y="280" width="300" height="104" rx="10" class="cpu"/>
+  <text x="620" y="306" text-anchor="middle" class="tt">Parakeet TDT 0.6B v3</text>
+  <text x="620" y="326" text-anchor="middle" class="m">English &#183; fp32 2.5 GB / int8 670 MB</text>
+  <text x="620" y="346" text-anchor="middle" class="mono">nemo128 &#8594; encoder &#8594; joint</text>
+  <text x="620" y="372" text-anchor="middle" class="m">TDT token-and-duration, one pass</text>
+
+  <rect x="820" y="280" width="300" height="104" rx="10" class="cpu"/>
+  <text x="970" y="306" text-anchor="middle" class="tt">Nemotron 3.5 ASR 0.6B</text>
+  <text x="970" y="326" text-anchor="middle" class="m">40 languages &#183; 1.0 GB</text>
+  <text x="970" y="346" text-anchor="middle" class="mono">encoder &#8594; decoder &#8594; joint</text>
+  <text x="970" y="372" text-anchor="middle" class="m">cache-aware streaming decode</text>
+
+  <path d="M 900 225 C 700 225 420 254 290 274" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M 975 254 L 975 274" stroke="#57606a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M 1050 225 C 1120 240 1050 254 1030 274" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- placement note -->
+  <rect x="470" y="440" width="650" height="90" rx="10" class="box"/>
+  <text x="795" y="466" text-anchor="middle" class="tt">where each checkpoint runs</text>
+  <text x="795" y="490" text-anchor="middle" class="m">free VRAM &#8805; budget &#8594; GPU, unbounded arena &#183; some room &#8594; arena capped at the free space</text>
+  <text x="795" y="510" text-anchor="middle" class="m">&#8804; 256 MiB free &#8594; CPU &#183; unmeasurable &#8594; tried, and a failed session is rebuilt on the CPU</text>
+
+  <path d="M 720 384 L 720 436" stroke="#bf8700" stroke-width="1.5" marker-end="url(#arrowPeach)"/>
+
+  <path d="M 975 384 C 975 420 900 436 900 436" stroke="#bf8700" stroke-width="1.5" fill="none" marker-end="url(#arrowPeach)"/>
+
+  <!-- stage 5 -->
+  <path d="M 620 404 L 620 470 L 200 470" stroke="#1a7f37" stroke-width="1.5" fill="none" marker-end="url(#arrowGreen)"/>
+
+  <rect x="20" y="440" width="360" height="90" rx="10" class="box"/>
+  <text x="200" y="466" text-anchor="middle" class="tt">5 &#183; write the artefacts</text>
+  <text x="200" y="490" text-anchor="middle" class="mono">formatter &#8594; md txt srt vtt json</text>
+  <text x="200" y="512" text-anchor="middle" class="mono">chapters &#8594; sliced md &#183; redb &#8594; lc-rs search</text>
+
+  <text x="20" y="600" class="m">No virtualenv, no torch, no child process per model, no JSON payload crossing a process boundary.</text>
+</svg>
